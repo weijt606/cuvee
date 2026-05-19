@@ -6,7 +6,7 @@ trade buyer). This document covers the **agent architecture**, **file
 layout**, and the **SubAgent contract** every external API call sits behind.
 
 > General setup info (env, dev loop, scripts) lives in the project [`README.md`](../README.md).
-> Provider adapter details (OpenAI / Tavily / Pioneer.ai) live in [`SPONSORS.md`](SPONSORS.md).
+> Provider adapter details (LLM + retrieval + memory) live in [`PROVIDERS.md`](PROVIDERS.md).
 > This file is just the agent layer.
 
 ---
@@ -75,16 +75,16 @@ layout**, and the **SubAgent contract** every external API call sits behind.
                          │
                          ▼
                   feature_agent            ← exec summary, structured
-                  3-tier:                    markdown report, email digest
-                  1. Pioneer (small open    (DEMO_FAST=true → skip tier 1,
-                     OSS LLM)                go straight to OpenAI tier 2)
-                  2. OpenAI structured
-                  3. Deterministic template
+                  2-tier:                    markdown report, email digest
+                  1. defaultLLM().chat()    (LLM provider via CUVEE_LLM_PROVIDER:
+                     with strict JSON        OpenAI / Claude / Qwen / DeepSeek / Ollama)
+                  2. Deterministic template
                          │
                          ▼ (only if timeframe is historical)
                   backtest_agent           ← verifies prediction against
-                  Tavily critic + OpenAI     historical critic + market
-                  comparison                 signals (Decanter, etc.)
+                  defaultRetrieval()       historical critic + market signals.
+                  + defaultLLM()           Retrieval via Tavily / Brave / SearXNG.
+                  comparison
 ```
 
 **Principles:**
@@ -108,11 +108,12 @@ layout**, and the **SubAgent contract** every external API call sits behind.
 | `src/lib/agents/sub-agents/tavily.ts` | 5-source-type public-web harness | ✅ wired |
 | `src/lib/agents/sub-agents/tavily-cache.ts` | SQLite 7-day cache + idempotent hydration from export JSON | ✅ wired |
 | `src/lib/agents/sub-agents/backtest.ts` | Critic retrieval + verdict comparison | ✅ wired |
-| `src/lib/agents/extraction.ts` | Vintage-quality schema scoring (28 features × 6 gates × 11 adjustments) + persona-lens injection | ✅ wired |
-| `src/lib/agents/feature.ts` | 3-tier narrative generator (Pioneer → OpenAI → template) with structured-report prompts | ✅ wired |
-| `src/lib/training/pioneer.ts` | Pioneer.ai chat-completions adapter | ✅ wired |
-| `src/lib/ai/openai.ts` | OpenAI client + helpers | ✅ wired |
-| `src/lib/env.ts` | zod env + `openaiModelForAgents()` + `isDemoFast` / `isDemoMode` | ✅ stable |
+| `src/lib/agents/extraction.ts` | Vintage-quality schema scoring (28 features × 6 gates × 11 adjustments) + persona-lens injection + few-shot retrieval from memory | ✅ wired |
+| `src/lib/agents/feature.ts` | LLM narrative tier via `defaultLLM()` + deterministic template fallback | ✅ wired |
+| `src/lib/llm/` | Provider abstraction — OpenAI, Anthropic Claude, Qwen, DeepSeek, Ollama. `defaultLLM()` + `hasLLM()`. | ✅ wired |
+| `src/lib/retrieval/` | Provider abstraction — Tavily, Brave, SearXNG, null. `defaultRetrieval()` + `hasRetrieval()`. | ✅ wired |
+| `src/lib/memory/` | SQLite-backed episodic memory + few-shot retrieval + calibration-drift query helpers | ✅ wired |
+| `src/lib/env.ts` | zod env + `integrations` map + `isDemoFast` / `isDemoMode` | ✅ stable |
 | `src/lib/wine/types.ts` | `AnalyzeInput` / `AnalyzeResult` / `TradePersona` / `BacktestSnapshot` / `GeoSnapshot` | ✅ shared FE+BE |
 | `src/lib/wine/regions.ts` | Burgundy + Bordeaux static region list | ✅ wired |
 | `src/lib/wine/products.ts` | 80-entry curated wine catalog (61 1855 classés + 21 Burgundy crus) | ✅ wired |
@@ -228,12 +229,13 @@ export interface SubAgent<TInput, TData> {
 
 ### `feature_agent` — `src/lib/agents/feature.ts`
 
-- **Tier 1**: Pioneer-hosted open-source LLM (Qwen / GLM / Llama 7-8B class)
-  with `response_format: json_object`. Fast + cheap "wrapping" of the
-  extraction numbers into prose. Returns `null` on any failure.
-- **Tier 2**: OpenAI structured output (strict `json_schema`) as fallback.
-- **Tier 3**: deterministic template assembled from extraction's output
-  (always succeeds).
+- **Tier 1**: the configured LLM provider (`defaultLLM()` — OpenAI by
+  default; Claude, Qwen, DeepSeek, or Ollama selectable via
+  `CUVEE_LLM_PROVIDER`). Strict JSON enforced per-provider — `response_format`
+  on OpenAI-compatible APIs, the `submit_result` tool-use trick on Claude.
+  Returns `null` on any failure.
+- **Tier 2**: deterministic template assembled from extraction's output
+  (always succeeds — keeps the dashboard demoable with zero LLM access).
 - **Output** (`FeatureOutput`): `executiveSummary`, `reportMarkdown`,
   `emailDigest`. Consumed by the `ExecutiveSummary` UI card, the export
   button, and the subscribe dialog.
@@ -296,15 +298,15 @@ and client (no `server-only` imports inside).
 
 `NEXT_PUBLIC_DEMO_MODE=true` short-circuits the entire pipeline:
 
-- The orchestrator returns `demoWineAnalysis(input)` directly — no OpenAI,
-  no Tavily, no Pioneer, no sub-agent dispatch.
+- The orchestrator returns `demoWineAnalysis(input)` directly — no LLM call,
+  no retrieval, no memory write, no sub-agent dispatch.
 - Each sub-agent **should also** check `isDemoMode` at the top of `run()` and
   return its own fixture (so unit tests can exercise the agent in isolation).
 - The fixture set covers well-known vintages (2010 / 2013 / 2015 / 2020) so
   backtest mode has plausible output offline.
 
-**Why it matters:** sponsor APIs can rate-limit or fail at the worst possible
-moment (live demo). Demo mode is the rehearsal contract — H3 in `CLAUDE.md`.
+**Why it matters:** external APIs can rate-limit or fail at the worst possible
+moment (live demo). Demo mode is the rehearsal contract.
 Every new external call must add a fixture branch.
 
 **Testing demo mode:**
@@ -388,7 +390,7 @@ they're consulted.
 | Why is this slow on a cold call? | §7 — first call misses all three caches |
 | Why direct-dispatch instead of LLM routing? | §1 — fixed-order pipeline saves 5-7 GPT roundtrips |
 | What goes in a PR? | §8 |
-| How are OpenAI / Tavily / Pioneer wired? | [`SPONSORS.md`](SPONSORS.md) |
+| How are LLM / retrieval / memory providers wired? | [`PROVIDERS.md`](PROVIDERS.md) |
 | Where do UI primitives live? | `src/components/wine/atlas/*` (shell) + `src/components/wine/*` (cards) |
 | How does the View-report gate work? | `WorkflowHero.tsx` — `done` + `onContinue` props |
 | How does light/dark mode work? | `src/components/ThemeToggle.tsx` + inline boot script in `layout.tsx` |
