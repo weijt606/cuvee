@@ -1,0 +1,338 @@
+{
+  "exportedAt": "2026-05-16T14:46:06.227Z",
+  "sourceDatabase": "data/.cache/tavily-search.sqlite",
+  "includeExpired": false,
+  "totalEntries": 15,
+  "entries": [
+    {
+      "cacheKey": "tavily:v1:61c730df7328a30255d08c0ce673797afac75d5f358398d2e9d4a6df00f09492",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Château Haut-Brion",
+      "year": 2025,
+      "sourceType": "bordeaux_regulation",
+      "query": "Bordeaux AOC INAO regulation appellation certification yield harvest rule reglementation 2025 en primeur allocation chateau Château Haut-Brion",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:44:27.589Z",
+      "expiresAt": "2026-05-23T14:44:27.589Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.thedrinksbusiness.com/2026/05/bordeaux-2025-en-primeur-pessac-leognan-graves-reds-something-of-a-revelation/",
+          "title": "Bordeaux 2025 en primeur: Pessac-Léognan & Graves reds ...",
+          "content": "| | | | | | | | | | | --- --- --- --- --- | | Wine | % Merlot | | | % Cabernet (S & F) | | | Yields (hl/ha) | | | | 2023 | 2024 | 2025 | 2023 | 2024 | 2025 | 2023 | 2024 | 2025 | | Carmes Haut-Brion | 20 | 23 | 17 | 80 | 67 | 83 | 50 | 24 | 38 | | Domaine de Chevalier | 25 | 30 | 30 | 70 | 65 | 65 | 30 | 48 | 34 | | Haut Bailly | 34 | 40 | 36 | 62 | 60 | ...",
+          "score": 0.7031221
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:5f1c8523beaf45b2358ea4021a5d76095755642e94bfe01fc8350e9d2f6ce852",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Château Haut-Brion",
+      "year": 2025,
+      "sourceType": "bordeaux_sentiment",
+      "query": "Bordeaux wine sentiment opinion critic review consumer reaction avis millesime 2025 en primeur allocation chateau Château Haut-Brion",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:44:25.856Z",
+      "expiresAt": "2026-05-23T14:44:25.856Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.jamessuckling.com/wine-tasting-reports/bordeaux-en-primeur-2025-special-weekly-report-ii",
+          "title": "Bordeaux En Primeur 2025: Special Weekly Report II - James Suckling",
+          "content": "Indeed, some of the very top wines in our tasting, all possible perfect wines, such as Ausone, Angelus and Chateau Les Carmes-Haut-Brion, showed incredible cabernet franc character with such purity of fruit, yet classic cabernet sauvignons such as Mouton Rothschild and Lafite Rothschild showed equally irresistible fruit intensity and balance. And pure mer...",
+          "score": 0.99991775
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:1f03f54152347d4a59cb096baca90610b119f56ad51f18f7f1350974b782cbbe",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Château Haut-Brion",
+      "year": 2025,
+      "sourceType": "bordeaux_policy",
+      "query": "Bordeaux France agriculture policy climate aid support vineyard disaster subsidy politique agricole 2025 en primeur allocation chateau Château Haut-Brion",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:44:25.727Z",
+      "expiresAt": "2026-05-23T14:44:25.727Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.jamessuckling.com/wine-tasting-reports/bordeaux-en-primeur-2025-special-weekly-report-ii",
+          "title": "Bordeaux En Primeur 2025: Special Weekly Report II - James Suckling",
+          "content": "Saskia de Rothschild, the head of Chateau Lafite Rothschild, is elated with the quality of 2025. [...] achieve ripeness in their cabernets, even during the rains at the end of September. [...] The grape-growing season was particular in nature. Some growers called it a paradox. On paper, most people, including myself, expected the wines to reflect the hot ...",
+          "score": 0.9984269
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:bf7a5a9b8f8b7dc9c56f1bce5eb88d54ccfc93fd114d53a4ef3e673c113d1ac4",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Château Haut-Brion",
+      "year": 2025,
+      "sourceType": "bordeaux_policy",
+      "query": "Bordeaux viticulture government policy agriculture support climate compensation aide climatique 2025 en primeur allocation chateau Château Haut-Brion",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:44:25.507Z",
+      "expiresAt": "2026-05-23T14:44:25.507Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.thedrinksbusiness.com/2026/05/bordeaux-2025-en-primeur-pessac-leognan-graves-reds-something-of-a-revelation/",
+          "title": "Bordeaux 2025 en primeur: Pessac-Léognan & Graves reds ‘something of a revelation’",
+          "content": "Menu ## The Drinks Business The Drinks Business The Drinks Business Search User Search Close Close # Bordeaux 2025 en primeur: Pessac-Léognan & Graves reds ‘something of a revelation’ db Bordeaux correspondent Colin Hay continues his tour of the 2025 en primeur offerings by heading to Pessac-Léognan and the Graves, where his anxieties are largely dispelle...",
+          "score": 0.5849357
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:ebe15580f3edc09cfa3d93d7be6b1a0427cb4d2cfdb861b0323ff841b1238ca3",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Château Haut-Brion",
+      "year": 2025,
+      "sourceType": "bordeaux_sentiment",
+      "query": "Bordeaux forum community discussion vintage opinion media review reaction consommateurs 2025 en primeur allocation chateau Château Haut-Brion",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:44:25.494Z",
+      "expiresAt": "2026-05-23T14:44:25.494Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.frw.co.uk/editorial/bordeaux-2025-vintage-overview?srsltid=AfmBOora_ZIa-CjQ4fNRTgR3LWwbMEez0Sbgc2bhR3_8hj6lcq-Fq_h6",
+          "title": "Bordeaux 2025: vintage overview - FINE+RARE",
+          "content": "At Haut-Brion and La Mission Haut-Brion, some lots reached IPT 100 (Indice de Polyphénols Totaux – Total Polyphenol Index), an unusually high figure even for Cabernet Sauvignon. For Bordeaux 2025, it matters because small berries and thick skins can push IPT up quickly. The better wines are not just those with high IPT, but those where the structure is ca...",
+          "score": 0.9997584
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:f3faddd4f283050dfc19c6afaa78c46a8439ad09d2e8917098d0a72b6bdc27eb",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Chateau Margaux",
+      "year": 2025,
+      "sourceType": "bordeaux_market",
+      "query": "Bordeaux en primeur allocation reducing allocation allocation cuts negociants courtiers merchants market reaction release price buyer hesitation weak demand pressure du marche prix 2025 en primeur allocation chateau Chateau Margaux",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:43:37.519Z",
+      "expiresAt": "2026-05-23T14:43:37.519Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.thedrinksbusiness.com/2026/04/bordeaux-2025-the-market-conditions-when-complicated-is-good/",
+          "title": "Bordeaux 2025 – the market conditions: when complicated is good",
+          "content": "It was almost inevitable that things were going to change and it came as a surprise to few seasoned market observes when the first négociants started refusing at least some of their allocations. Today – and, crucially, for the 2025 en primeur campaign more prospectively – the négociants will accept only allocations of wines that are essentially already so...",
+          "score": 0.62879556
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:e2455844ddccff7b078a6f4130b286c0bcfea011e2d30b8673bd627b5be2cbe6",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Chateau Margaux",
+      "year": 2025,
+      "sourceType": "bordeaux_regulation",
+      "query": "INAO Bordeaux appellation regles AOC vendanges rendement certification controle 2025 en primeur allocation chateau Chateau Margaux",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:43:36.509Z",
+      "expiresAt": "2026-05-23T14:43:36.509Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.cotes-de-bourg.com/wp-content/uploads/2025/11/Presentation-FGVB-24-novembre-2025.pdf",
+          "title": "[PDF] Nouveauté 2025 « VENDANGES” remplace le service “RECOLTE”",
+          "content": "Conditions de production RECOLTE 2025 6 Niveaux VCI - Déplafonnement Le Comité national INAO du 10 septembre a accepté de déplafonner le VCI jusqu’à 50% du rendement du cahier des charges, dans la limite du butoir ; tout en maintenant un plafond cumulé maximal à 50% du rendement cahier des charges. Le texte réglementaire devrait être publié avant la décla...",
+          "score": 0.9990073
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:b2d85c325688cbe859ffe759a659017505c44cb7b562374f74b7ae4167be3373",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Chateau Margaux",
+      "year": 2025,
+      "sourceType": "bordeaux_market",
+      "query": "Bordeaux en primeur market reaction trade sentiment industry chatter market rumors negociants courtiers merchants release price weak demand buyer hesitation stock pressure inventory pressure 2025 en primeur allocation chateau Chateau Margaux",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:43:36.497Z",
+      "expiresAt": "2026-05-23T14:43:36.497Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.vin-x.com/blog/en-primeur/how-will-the-market-view-bordeaux-2025-en-primeurs",
+          "title": "How will the market view Bordeaux 2025 En Primeurs? - Vin-X",
+          "content": "The pricing strategy set by the Bordeaux Chateaux and their courtiers will be more important this year than ever as the future of the En Primeur process itself is being questioned. The fine wine trade needs to feel Bordeaux is working with the supply chain through to the consumer when it comes to the 2025 En Primeur campaign. ### What can we learn from th...",
+          "score": 0.66569364
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:45625f8da7da575d31b829ce9a4c10742938deb356ad23c2ee9efde9fa16527b",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Chateau Margaux",
+      "year": 2025,
+      "sourceType": "bordeaux_winemaker",
+      "query": "Bordeaux oenologue interview note de vendange avis millesime decision recolte chateau 2025 en primeur allocation chateau Chateau Margaux",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:43:36.391Z",
+      "expiresAt": "2026-05-23T14:43:36.391Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.wine-conversation.com/conversations/lets-talk-about-bordeaux-2025-the-verdict",
+          "title": "Let's Talk About... Bordeaux 2025: The Verdict",
+          "content": "Wine of the vintage for both is Chteau Margaux. Jane explains the brave decision Phillipe Bascaules took, leaving picking the grapes until the end of September. The other top wines they agree on include Chteaux Haut-Bailly, Petrus, Mouton Rothschild and Beauséjour. Sarah notes Branaire-Ducru is worth keeping an eye out for, and Jane singles out Calon Segu...",
+          "score": 0.6989468
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:0c0b855075f2adf9da5a0da30975e018aad26eeb246eb6f523d780da5d30a932",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Chateau Margaux",
+      "year": 2025,
+      "sourceType": "bordeaux_winemaker",
+      "query": "Bordeaux winemaker interview chateau harvest note vintage opinion vigneron vendanges 2025 en primeur allocation chateau Chateau Margaux",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:43:35.982Z",
+      "expiresAt": "2026-05-23T14:43:35.982Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.decanter.com/learn/bordeaux-vintage-guide/bordeaux-2025-the-best-wines-from-margauxs-miracle-vintage/",
+          "title": "Bordeaux 2025: The best wines from Margaux's 'miracle vintage'",
+          "content": "Small berries were universal (‘as small as 2022’). For Château Margaux, 2025 will represent the smallest volume of grand vin production since 1856 with only 37% of the total yield of 22hl/ha going into the top wine. Château Siran recorded its smallest yield without hail or frost at 32 hl/ha, and Château Brane-Cantenac's owner, Henri Lurton, reported the M...",
+          "score": 0.9998894
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:55b74ca71d5bcceb0e6473c6e9bdab221e0bdf9e3c00cfa069fd917d435157f2",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Chateau Margaux",
+      "year": 2025,
+      "sourceType": "bordeaux_sentiment",
+      "query": "Bordeaux wine sentiment opinion critic review consumer reaction avis millesime 2025 en primeur allocation chateau Chateau Margaux",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:43:34.315Z",
+      "expiresAt": "2026-05-23T14:43:34.315Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.jamessuckling.com/wine-tasting-reports/bordeaux-en-primeur-2025-special-weekly-report",
+          "title": "Bordeaux En Primeur 2025: Special Weekly Report - James Suckling",
+          "content": "“There’s lots of diversity in the vintage,” admitted Jean-Emmanuel Danjoy, the head winemaker for the Rothschild family’s estates, including Chateau d’Armailhac, Chateau Clerc Milon and Chateau Mouton Rothschild. The latter is one of my wines of the vintage, so far. “The risk was to make a monster in 2025,” added Pierre Graffeuille, managing director of C...",
+          "score": 0.99996495
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:61a539f7d23efbb4ea57067503777259fee87959e8a3d7b5c4223cce4aed27e7",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Chateau Margaux",
+      "year": 2025,
+      "sourceType": "bordeaux_policy",
+      "query": "Bordeaux viticulture government policy agriculture support climate compensation aide climatique 2025 en primeur allocation chateau Chateau Margaux",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:43:33.623Z",
+      "expiresAt": "2026-05-23T14:43:33.623Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://bordeauxindex.com/learn/articles/en-primeur-2025-the-report",
+          "title": "En Primeur 2025: The Report | Bordeaux Index Fine Wine & Spirits",
+          "content": "Stylistically, Bordeaux continues its evolution. Over the past decade, we’ve seen a marked shift driven by climate, improved viticultural understanding and changing consumer expectations. The result is a generation of wines that can be approached and appreciated in their youth, yet still retain the structure and balance required for long-term ageing. The ...",
+          "score": 0.5931622
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:54225fa1d67689954898ce51daa034fb79184b4375d11a3566b71627960e209e",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Chateau Margaux",
+      "year": 2025,
+      "sourceType": "bordeaux_regulation",
+      "query": "Bordeaux AOC INAO regulation appellation certification yield harvest rule reglementation 2025 en primeur allocation chateau Chateau Margaux",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:43:33.486Z",
+      "expiresAt": "2026-05-23T14:43:33.486Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.thedrinksbusiness.com/2026/05/bordeaux-2025-en-primeur-margaux-sees-a-vintage-in-which-tiny-details-make-big-differences/",
+          "title": "Bordeaux 2025 en primeur: Margaux sees 'a vintage in which tiny details make big differences' - The Drinks Business",
+          "content": "##### Partner Content | | | | | | | | | | | --- --- --- --- --- | | Wine | % Cabernet Sauvignon | | | % Merlot | | | Yields (hl/ha) | | | | 2023 | 2024 | 2025 | 2023 | 2024 | 2025 | 2023 | 2024 | 2025 | | Brane-Cantenac | 70 | 77 | 80 | 20 | 22 | 18 | 46 | 47 | 32 | | Durfort-Vivens | 92 | 94 | 91 | 8 | 6 | 9 | 35 | 37 | 28 | | D’Issan | 70 | 65 | 64 | 25...",
+          "score": 0.7185356
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:0741bf6824c38f7c5d0159bf67c49ee4a40c9586ead74f435d1076d8085265b1",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Chateau Margaux",
+      "year": 2025,
+      "sourceType": "bordeaux_sentiment",
+      "query": "Bordeaux forum community discussion vintage opinion media review reaction consommateurs 2025 en primeur allocation chateau Chateau Margaux",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:43:33.418Z",
+      "expiresAt": "2026-05-23T14:43:33.418Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.jamessuckling.com/wine-tasting-reports/bordeaux-en-primeur-2025-special-weekly-report",
+          "title": "Bordeaux En Primeur 2025: Special Weekly Report - James Suckling",
+          "content": "Some of the best wines in our tastings last week were those picked after the rain on Sept. 20, giving the wines, particularly cabernet, a little more ripeness after a few days and producing slightly plusher wines that were still fresh and vibrant. The fantastic 2025 Château Margaux is a sublime example of that intensity and ripeness, yet there is a gentle...",
+          "score": 0.6543875
+        }
+      ]
+    },
+    {
+      "cacheKey": "tavily:v1:b7944f06c381228a9e8fa6bcca25c5cd39be011d0f0cfa44a8b0516a3492bac6",
+      "region": "Bordeaux",
+      "regionScope": "bordeaux-medoc",
+      "chateau": "Chateau Margaux",
+      "year": 2025,
+      "sourceType": "bordeaux_policy",
+      "query": "Bordeaux France agriculture policy climate aid support vineyard disaster subsidy politique agricole 2025 en primeur allocation chateau Chateau Margaux",
+      "maxResultsPerQuery": 1,
+      "createdAt": "2026-05-16T14:43:33.339Z",
+      "expiresAt": "2026-05-23T14:43:33.339Z",
+      "isExpired": false,
+      "resultCount": 1,
+      "results": [
+        {
+          "url": "https://www.thedrinksbusiness.com/2026/05/bordeaux-2025-en-primeur-margaux-sees-a-vintage-in-which-tiny-details-make-big-differences/",
+          "title": "Bordeaux 2025 en primeur: Margaux sees 'a vintage in which tiny details make big differences' - The Drinks Business",
+          "content": "The result are wines that were forged in a variety of more or less challenging conditions by properties with varying degrees of access to the resources requires to mitigate the associated risks of those challenges (whether that be the capacity to pick a vineyard very quickly, the capacity to vinify sub-plots separately, or the access to the densimetric so...",
+          "score": 0.98926485
+        }
+      ]
+    }
+  ]
+}

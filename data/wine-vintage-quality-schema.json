@@ -1,0 +1,1439 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemaName": "wine-vintage-quality-score-v1",
+  "version": "1.0.0",
+  "sourceWorkbook": {
+    "fileName": "wine-vintage-quality-scale.xlsx",
+    "sheet": "scale",
+    "extractedAt": "2026-05-16",
+    "baselineRegion": "Bordeaux Left Bank"
+  },
+  "scoreRange": {
+    "minimum": 0,
+    "maximum": 100
+  },
+  "calculation": {
+    "summary": "Compute core vineyard/climate feature scores with non-linear scoring curves, calculate the base weighted mean, apply hard event gates, then apply bounded external modifiers extracted by Tavily/public-web agents. Extreme physical events can dominate the final score regardless of nominal feature weight; external signals can move the market-adjusted score but cannot rescue a catastrophic vintage.",
+    "steps": [
+      "Normalize core observations into feature scores on a 0-100 scale.",
+      "Compute weightedBaseScore = sum(coreFeature.score * coreFeature.weight). Core feature weights sum to 1.0.",
+      "Apply hard event gates before sentiment or market boosts: gatedScore = min(weightedBaseScore, activeGate.maximumScoreCap).",
+      "Use Tavily/public-web agents to extract external modifier features with evidence, source type, recency, and confidence.",
+      "Apply bounded dynamic modifiers: adjustedScore = gatedScore + sum(modifier.points).",
+      "Return finalScore = clamp(adjustedScore, 0, 100)."
+    ],
+    "gradeBands": [
+      {
+        "label": "Great",
+        "minimum": 85,
+        "maximum": 100
+      },
+      {
+        "label": "Excellent",
+        "minimum": 70,
+        "maximum": 84.999
+      },
+      {
+        "label": "Good",
+        "minimum": 55,
+        "maximum": 69.999
+      },
+      {
+        "label": "Average",
+        "minimum": 40,
+        "maximum": 54.999
+      },
+      {
+        "label": "Poor",
+        "minimum": 0,
+        "maximum": 39.999
+      }
+    ],
+    "scoringLayers": [
+      {
+        "id": "base_weighted_vineyard_score",
+        "description": "Original workbook-derived natural, phenological, vineyard, and first-order market features. These features keep numeric weights and sum to 1.0.",
+        "featureSelector": "feature.scoringLayer is missing OR feature.scoringLayer == 'base_weighted'",
+        "weightSum": 1.0
+      },
+      {
+        "id": "tavily_external_modifiers",
+        "description": "External non-natural signals extracted from public web, policy, trade, critic, reputation, and grape-variety context. These features use weight 0.0 in the base weighted mean and affect the final score through bounded dynamic adjustments.",
+        "featureSelector": "feature.scoringLayer == 'external_modifier'",
+        "maximumPositiveAdjustment": 18,
+        "maximumNegativeAdjustment": -28
+      }
+    ]
+  },
+  "hardEventGates": [
+    {
+      "id": "lethal_heat",
+      "condition": "tmax_absolute_c >= 50",
+      "maximumScoreCap": 10,
+      "rationale": "A maximum temperature at or above 50 C is treated as catastrophic vineyard heat exposure, not as a small weighted penalty."
+    },
+    {
+      "id": "severe_heat_shutdown",
+      "condition": "days_tmax_ge_40_c >= 3",
+      "maximumScoreCap": 35,
+      "rationale": "Multiple days above 40 C can shut down grapevine photosynthesis and degrade acid, color, and aroma potential."
+    },
+    {
+      "id": "flood_or_waterlogging",
+      "condition": "flooded_blocks_share >= 0.25 OR harvest_rain_mm >= 300",
+      "maximumScoreCap": 25,
+      "rationale": "Flooding and extreme harvest rain create waterlogging, dilution, splitting, and rot risk."
+    },
+    {
+      "id": "botrytis_outbreak",
+      "condition": "botrytis_incidence_share >= 0.35",
+      "maximumScoreCap": 30,
+      "rationale": "High disease incidence can dominate final vintage quality even if seasonal climate averages look acceptable."
+    },
+    {
+      "id": "severe_spring_frost",
+      "condition": "frost_events_count >= 5 OR minimum_spring_tmin_c <= -6",
+      "maximumScoreCap": 45,
+      "rationale": "Severe frost primarily damages yield and fruit set; quality ceiling is lowered even when later weather recovers."
+    },
+    {
+      "id": "policy_market_shock",
+      "condition": "policy_trade_risk_index >= 0.9",
+      "maximumScoreCap": 75,
+      "rationale": "Policy shocks do not change grape chemistry directly, but they reduce the commercial vintage score by damaging demand, distribution, and release strategy."
+    }
+  ],
+  "features": [
+    {
+      "id": "gst",
+      "name": "Growing Season Temperature",
+      "category": "climate_temperature",
+      "weight": 0.13,
+      "unit": "celsius",
+      "window": "Apr 1 - Sep 30",
+      "rawValueFormula": "mean((tmax_daily + tmin_daily) / 2) over Apr-Sep",
+      "scoreFunction": {
+        "type": "piecewise_quadratic",
+        "rules": [
+          {
+            "if": "value <= 19",
+            "score": "100 - ((19 - value) / 3.5)^2 * 100"
+          },
+          {
+            "if": "19 < value <= 22",
+            "score": "100 - ((value - 19) / 3)^2 * 30"
+          },
+          {
+            "if": "value > 22",
+            "score": "70 - ((value - 22) / 3) * 70"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Ashenfelter 1995",
+        "Jones 2005"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "harvest_rain",
+      "name": "Harvest Season Rainfall",
+      "category": "climate_rainfall",
+      "weight": 0.12,
+      "unit": "mm",
+      "window": "Aug 1 - Sep 30",
+      "rawValueFormula": "sum(precipitation_daily_mm) over Aug-Sep",
+      "scoreFunction": {
+        "type": "piecewise_with_tail_penalty",
+        "rules": [
+          {
+            "if": "value <= 80",
+            "score": "100"
+          },
+          {
+            "if": "80 < value <= 200",
+            "score": "100 - ((value - 80) / 120) * 70"
+          },
+          {
+            "if": "value > 200",
+            "score": "30 - min(30, (value - 200) / 10)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Ashenfelter 1995",
+        "Wood et al. 2023"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "dryness_index",
+      "name": "Dryness Index",
+      "category": "climate_water_balance",
+      "weight": 0.08,
+      "unit": "mm",
+      "window": "Apr 1 - Sep 30",
+      "rawValueFormula": "W0 + sum(monthly_rain - vine_transpiration - bare_soil_evaporation), with W0 = 200 mm",
+      "scoreFunction": {
+        "type": "piecewise_optimum_band",
+        "rules": [
+          {
+            "if": "value < -100",
+            "score": "30"
+          },
+          {
+            "if": "-100 <= value < 50",
+            "score": "30 + ((value + 100) / 150) * 40"
+          },
+          {
+            "if": "50 <= value <= 150",
+            "score": "70 + ((value - 50) / 100) * 30"
+          },
+          {
+            "if": "value > 150",
+            "score": "100 - ((value - 150) / 5)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Tonietto & Carbonneau 2004",
+        "van Leeuwen et al. 2004"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "huglin_index",
+      "name": "Huglin Index",
+      "category": "climate_temperature",
+      "weight": 0.07,
+      "unit": "celsius_day",
+      "window": "Apr 1 - Sep 30",
+      "rawValueFormula": "latitude_k * sum(max(0, ((tmean_daily - 10) + (tmax_daily - 10)) / 2))",
+      "scoreFunction": {
+        "type": "piecewise_optimum_band",
+        "rules": [
+          {
+            "if": "value < 1800",
+            "score": "((value - 1500) / 300) * 40"
+          },
+          {
+            "if": "1800 <= value < 2400",
+            "score": "40 + ((value - 1800) / 600) * 60"
+          },
+          {
+            "if": "2400 <= value <= 2700",
+            "score": "100 - ((value - 2400) / 300) * 20"
+          },
+          {
+            "if": "value > 2700",
+            "score": "80 - ((value - 2700) / 100) * 30"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Huglin 1978",
+        "Tonietto & Carbonneau 2004"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "cool_night_index",
+      "name": "Cool Night Index",
+      "category": "climate_temperature",
+      "weight": 0.06,
+      "unit": "celsius",
+      "window": "September",
+      "rawValueFormula": "mean(tmin_daily_c) over September",
+      "scoreFunction": {
+        "type": "piecewise_decline",
+        "rules": [
+          {
+            "if": "value <= 10",
+            "score": "100"
+          },
+          {
+            "if": "10 < value <= 14",
+            "score": "100 - ((value - 10) / 4) * 30"
+          },
+          {
+            "if": "14 < value <= 18",
+            "score": "70 - ((value - 14) / 4) * 40"
+          },
+          {
+            "if": "value > 18",
+            "score": "30"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Tonietto & Carbonneau 2004"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "winter_rain",
+      "name": "Winter Rainfall",
+      "category": "climate_rainfall",
+      "weight": 0.04,
+      "unit": "mm",
+      "window": "Previous Oct 1 - Mar 31",
+      "rawValueFormula": "sum(precipitation_daily_mm) over Oct(t-1)-Mar(t)",
+      "scoreFunction": {
+        "type": "piecewise_optimum_band",
+        "rules": [
+          {
+            "if": "value < 200",
+            "score": "(value / 200) * 60"
+          },
+          {
+            "if": "200 <= value <= 600",
+            "score": "60 + ((value - 200) / 400) * 40"
+          },
+          {
+            "if": "value > 600",
+            "score": "max(40, 100 - ((value - 600) / 10))"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Ashenfelter 1995"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "heat_days",
+      "name": "Heat Wave Days",
+      "category": "climate_extreme_temperature",
+      "weight": 0.05,
+      "unit": "days",
+      "window": "Jun 1 - Sep 30",
+      "rawValueFormula": "count(tmax_daily_c > 34) over Jun-Sep",
+      "scoreFunction": {
+        "type": "linear_penalty",
+        "rules": [
+          {
+            "if": "value >= 0",
+            "score": "100 - value * 5"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Mozell & Thach 2014",
+        "Roucher et al. 2022"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "extreme_max_temperature",
+      "name": "Extreme Maximum Temperature",
+      "category": "climate_extreme_temperature",
+      "weight": 0.06,
+      "unit": "celsius",
+      "window": "Apr 1 - Sep 30",
+      "rawValueFormula": "max(tmax_daily_c) over Apr-Sep",
+      "scoreFunction": {
+        "type": "threshold_accelerating_penalty",
+        "rules": [
+          {
+            "if": "value <= 35",
+            "score": "100"
+          },
+          {
+            "if": "35 < value <= 40",
+            "score": "100 - ((value - 35) / 5)^2 * 45"
+          },
+          {
+            "if": "40 < value < 50",
+            "score": "55 - ((value - 40) / 10)^2 * 55"
+          },
+          {
+            "if": "value >= 50",
+            "score": "0"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "dynamicEffect": "Activates hard gate lethal_heat at 50 C and severe_heat_shutdown when repeated 40 C days occur.",
+      "sources": [
+        "Grapevine heat stress literature",
+        "Oxford Companion to Wine heat stress"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "flood_excess_rain",
+      "name": "Flood and Excess Rain Severity",
+      "category": "climate_extreme_rainfall",
+      "weight": 0.07,
+      "unit": "index_0_to_1",
+      "window": "Apr 1 - harvest",
+      "rawValueFormula": "max(flooded_blocks_share, normalized_3day_rain_anomaly, normalized_soil_saturation)",
+      "scoreFunction": {
+        "type": "convex_penalty",
+        "rules": [
+          {
+            "if": "0 <= value <= 1",
+            "score": "100 * (1 - value^2.2)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "dynamicEffect": "Activates hard gate flood_or_waterlogging when flooded_blocks_share >= 0.25 or harvest rain exceeds 300 mm.",
+      "sources": [
+        "Waterlogging viticulture guidance",
+        "Botrytis and rain-risk literature"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "flowering_day",
+      "name": "Flowering Date",
+      "category": "phenology",
+      "weight": 0.04,
+      "unit": "day_of_year",
+      "window": "50 percent flowering",
+      "rawValueFormula": "observed 50 percent flowering DOY, or GFV model estimate from temperature",
+      "scoreFunction": {
+        "type": "piecewise_decline",
+        "rules": [
+          {
+            "if": "value <= 155",
+            "score": "100"
+          },
+          {
+            "if": "155 < value <= 170",
+            "score": "100 - ((value - 155) / 15) * 50"
+          },
+          {
+            "if": "value > 170",
+            "score": "50 - ((value - 170) / 5) * 10"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Wood et al. 2023",
+        "GFV model literature"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "veraison_day",
+      "name": "Veraison Date",
+      "category": "phenology",
+      "weight": 0.04,
+      "unit": "day_of_year",
+      "window": "50 percent veraison",
+      "rawValueFormula": "observed 50 percent veraison DOY, or GFV/Wang-Engel model estimate",
+      "scoreFunction": {
+        "type": "piecewise_decline",
+        "rules": [
+          {
+            "if": "value <= 210",
+            "score": "100"
+          },
+          {
+            "if": "210 < value <= 225",
+            "score": "100 - ((value - 210) / 15) * 50"
+          },
+          {
+            "if": "value > 225",
+            "score": "50 - ((value - 225) / 5) * 10"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Wood et al. 2023",
+        "GFV model literature"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "spring_frost_events",
+      "name": "Spring Frost Events",
+      "category": "climate_extreme_temperature",
+      "weight": 0.04,
+      "unit": "events",
+      "window": "Mar 1 - Apr 30",
+      "rawValueFormula": "count(tmin_daily_c < -2) over Mar-Apr",
+      "scoreFunction": {
+        "type": "linear_penalty",
+        "rules": [
+          {
+            "if": "value >= 0",
+            "score": "100 - value * 15"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Chuine et al. 2004",
+        "regional frost studies"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "yield",
+      "name": "Yield",
+      "category": "vineyard_output",
+      "weight": 0.03,
+      "unit": "hl_per_ha",
+      "window": "full vintage after harvest",
+      "rawValueFormula": "total_harvest_volume_hl / vineyard_area_ha",
+      "scoreFunction": {
+        "type": "u_shaped_optimum",
+        "rules": [
+          {
+            "if": "value < 25",
+            "score": "(value / 25) * 60"
+          },
+          {
+            "if": "25 <= value <= 55",
+            "score": "60 + ((value - 25) / 30) * 40"
+          },
+          {
+            "if": "value > 55",
+            "score": "max(30, 100 - ((value - 55) / 2))"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "CIVB",
+        "Bascaules et al."
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "flowering_rain",
+      "name": "Flowering Rainfall",
+      "category": "climate_rainfall",
+      "weight": 0.03,
+      "unit": "mm",
+      "window": "May 25 - Jun 15",
+      "rawValueFormula": "sum(precipitation_daily_mm) over flowering window",
+      "scoreFunction": {
+        "type": "piecewise_penalty",
+        "rules": [
+          {
+            "if": "value <= 30",
+            "score": "100"
+          },
+          {
+            "if": "30 < value <= 80",
+            "score": "100 - ((value - 30) / 50) * 40"
+          },
+          {
+            "if": "value > 80",
+            "score": "60 - ((value - 80) / 5) * 5"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Bordeaux phenology literature"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "diurnal_temperature_range",
+      "name": "Diurnal Temperature Range",
+      "category": "climate_temperature",
+      "weight": 0.03,
+      "unit": "celsius",
+      "window": "Aug 1 - Sep 30",
+      "rawValueFormula": "mean(tmax_daily_c - tmin_daily_c) over Aug-Sep",
+      "scoreFunction": {
+        "type": "piecewise_optimum_band",
+        "rules": [
+          {
+            "if": "value < 8",
+            "score": "(value / 8) * 50"
+          },
+          {
+            "if": "8 <= value <= 14",
+            "score": "50 + ((value - 8) / 6) * 50"
+          },
+          {
+            "if": "value > 14",
+            "score": "max(50, 100 - ((value - 14) * 5))"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "sources": [
+        "Jones 2005",
+        "regional Burgundy studies"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "disease_pressure",
+      "name": "Disease Pressure",
+      "category": "vineyard_risk",
+      "weight": 0.04,
+      "unit": "index_0_to_1",
+      "window": "bloom - harvest",
+      "rawValueFormula": "weighted index from botrytis_incidence_share, powdery_mildew_pressure, humidity_hours, and canopy_wetness_days",
+      "scoreFunction": {
+        "type": "convex_penalty",
+        "rules": [
+          {
+            "if": "0 <= value <= 1",
+            "score": "100 * (1 - value^1.8)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "dynamicEffect": "Activates botrytis_outbreak hard gate when botrytis incidence is at or above 35 percent.",
+      "sources": [
+        "Botrytis bunch rot literature",
+        "UC IPM grape guidance"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "market_expectation_sentiment",
+      "name": "External Expectation and Sentiment",
+      "category": "non_natural_market_signal",
+      "weight": 0.04,
+      "unit": "index_minus1_to_1",
+      "window": "pre-release and en primeur period",
+      "rawValueFormula": "z-scored blend of expert preview ratings, chateau reputation momentum, media sentiment, search/social interest, and Liv-ex or comparable market signals",
+      "scoreFunction": {
+        "type": "bounded_sigmoid",
+        "rules": [
+          {
+            "if": "-1 <= value <= 1",
+            "score": "50 + 50 * tanh(1.25 * value)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "dynamicEffect": "May add at most +6 points after hard gates; may subtract up to -10 points when sentiment is sharply negative.",
+      "sources": [
+        "Journal of Wine Economics expert-opinion studies",
+        "Liv-ex or comparable fine-wine market data"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "policy_trade_risk",
+      "name": "Policy and Trade Risk",
+      "category": "non_natural_policy_signal",
+      "weight": 0.03,
+      "unit": "index_0_to_1",
+      "window": "vintage release year",
+      "rawValueFormula": "normalized risk index from tariffs, import restrictions, appellation rule changes, export disruption, and macro demand shock",
+      "scoreFunction": {
+        "type": "threshold_penalty",
+        "rules": [
+          {
+            "if": "0 <= value <= 0.3",
+            "score": "100 - value * 40"
+          },
+          {
+            "if": "0.3 < value <= 0.7",
+            "score": "88 - ((value - 0.3) / 0.4) * 38"
+          },
+          {
+            "if": "0.7 < value <= 1",
+            "score": "50 - ((value - 0.7) / 0.3) * 50"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "dynamicEffect": "Can activate policy_market_shock hard gate for severe policy or trade disruptions.",
+      "sources": [
+        "OIV wine sector reports",
+        "wine trade tariff reporting"
+      ],
+      "scoringLayer": "base_weighted"
+    },
+    {
+      "id": "policy_support_signal",
+      "name": "Policy Support Signal",
+      "category": "tavily_policy_positive",
+      "scoringLayer": "external_modifier",
+      "weight": 0.0,
+      "unit": "index_0_to_1",
+      "window": "release year and next 12 months",
+      "rawValueFormula": "Tavily evidence score from subsidies, regional climate-adaptation support, export promotion, appellation recognition, tax relief, or official vineyard support programs.",
+      "scoreFunction": {
+        "type": "positive_evidence_score",
+        "rules": [
+          {
+            "if": "0 <= value <= 1",
+            "score": "50 + 50 * value"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "modifierRange": [
+        0,
+        5
+      ],
+      "tavilyExtraction": {
+        "facets": [
+          "government",
+          "news",
+          "vineyard_official"
+        ],
+        "positiveEvidence": [
+          "subsidy",
+          "export promotion",
+          "tax relief",
+          "climate adaptation grant",
+          "appellation recognition"
+        ],
+        "minimumIndependentSources": 2
+      },
+      "dynamicEffect": "Adds up to +5 points when policy support is recent, official, and directly applicable to the region or producers.",
+      "sources": [
+        "Tavily public web search",
+        "government and regional wine authority notices",
+        "OIV reports"
+      ]
+    },
+    {
+      "id": "policy_adverse_signal",
+      "name": "Policy Adverse Signal",
+      "category": "tavily_policy_negative",
+      "scoringLayer": "external_modifier",
+      "weight": 0.0,
+      "unit": "index_0_to_1",
+      "window": "release year and next 12 months",
+      "rawValueFormula": "Tavily evidence score from tariffs, import restrictions, alcohol marketing rules, appellation disputes, water-use limits, labor disruption, or tax increases.",
+      "scoreFunction": {
+        "type": "negative_evidence_score",
+        "rules": [
+          {
+            "if": "0 <= value <= 1",
+            "score": "100 * (1 - value)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "modifierRange": [
+        -10,
+        0
+      ],
+      "tavilyExtraction": {
+        "facets": [
+          "government",
+          "news",
+          "research"
+        ],
+        "negativeEvidence": [
+          "tariff",
+          "import restriction",
+          "tax increase",
+          "water restriction",
+          "labor strike",
+          "appellation dispute"
+        ],
+        "minimumIndependentSources": 2
+      },
+      "dynamicEffect": "Subtracts up to -10 points and can reinforce policy_market_shock when official policy directly constrains sales or production.",
+      "sources": [
+        "Tavily public web search",
+        "customs and tariff notices",
+        "trade association reports"
+      ]
+    },
+    {
+      "id": "public_expectation_momentum",
+      "name": "Public Expectation Momentum",
+      "category": "tavily_public_sentiment",
+      "scoringLayer": "external_modifier",
+      "weight": 0.0,
+      "unit": "index_minus1_to_1",
+      "window": "90 days before release through en primeur",
+      "rawValueFormula": "Recency-weighted sentiment from news, wine forums, social/search trend summaries, public tasting chatter, and consumer-facing vintage commentary.",
+      "scoreFunction": {
+        "type": "bounded_sigmoid",
+        "rules": [
+          {
+            "if": "-1 <= value <= 1",
+            "score": "50 + 50 * tanh(1.1 * value)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "modifierRange": [
+        -6,
+        6
+      ],
+      "tavilyExtraction": {
+        "facets": [
+          "news",
+          "forum",
+          "vineyard_official"
+        ],
+        "signals": [
+          "hype",
+          "skepticism",
+          "search interest",
+          "consumer expectation",
+          "public tasting notes"
+        ],
+        "minimumIndependentSources": 3
+      },
+      "dynamicEffect": "Adds or subtracts up to 6 points, but positive momentum is ignored when any catastrophic hard gate is active.",
+      "sources": [
+        "Tavily public web search",
+        "wine forums",
+        "public media sentiment"
+      ]
+    },
+    {
+      "id": "critic_pre_release_signal",
+      "name": "Critic and Expert Pre-release Signal",
+      "category": "tavily_expert_signal",
+      "scoringLayer": "external_modifier",
+      "weight": 0.0,
+      "unit": "index_minus1_to_1",
+      "window": "barrel tasting through release",
+      "rawValueFormula": "Normalized direction and strength of critic previews, merchant reports, sommelier commentary, and expert vintage assessments.",
+      "scoreFunction": {
+        "type": "bounded_sigmoid",
+        "rules": [
+          {
+            "if": "-1 <= value <= 1",
+            "score": "50 + 50 * tanh(1.35 * value)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "modifierRange": [
+        -5,
+        8
+      ],
+      "tavilyExtraction": {
+        "facets": [
+          "news",
+          "research",
+          "vineyard_official"
+        ],
+        "signals": [
+          "critic preview",
+          "barrel tasting",
+          "merchant report",
+          "vintage assessment"
+        ],
+        "minimumIndependentSources": 2
+      },
+      "dynamicEffect": "Expert enthusiasm can add up to +8 points; negative expert consensus can subtract up to -5 points.",
+      "sources": [
+        "Journal of Wine Economics expert-opinion studies",
+        "critic and merchant commentary"
+      ]
+    },
+    {
+      "id": "trade_liquidity_demand",
+      "name": "Trade Liquidity and Buyer Demand",
+      "category": "tavily_trade_market",
+      "scoringLayer": "external_modifier",
+      "weight": 0.0,
+      "unit": "index_minus1_to_1",
+      "window": "en primeur through 12 months after release",
+      "rawValueFormula": "Blend of merchant allocation signals, n\u00e9gociant demand, Liv-ex or comparable liquidity references, import demand, and distributor inventory commentary.",
+      "scoreFunction": {
+        "type": "bounded_sigmoid",
+        "rules": [
+          {
+            "if": "-1 <= value <= 1",
+            "score": "50 + 50 * tanh(value)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "modifierRange": [
+        -8,
+        5
+      ],
+      "tavilyExtraction": {
+        "facets": [
+          "news",
+          "forum",
+          "vineyard_official"
+        ],
+        "signals": [
+          "allocation",
+          "n\u00e9gociant demand",
+          "inventory",
+          "liquidity",
+          "importer demand"
+        ],
+        "minimumIndependentSources": 2
+      },
+      "dynamicEffect": "Weak trade demand can subtract more than strong demand can add, reflecting downside risk in commercial vintage quality.",
+      "sources": [
+        "Liv-ex or comparable market data",
+        "merchant reports",
+        "Tavily public web search"
+      ]
+    },
+    {
+      "id": "chateau_reputation_momentum",
+      "name": "Chateau Reputation Momentum",
+      "category": "tavily_reputation_signal",
+      "scoringLayer": "external_modifier",
+      "weight": 0.0,
+      "unit": "index_minus1_to_1",
+      "window": "prior 3 vintages plus current release campaign",
+      "rawValueFormula": "Evidence-weighted change in producer reputation from prior scores, investment news, winemaker changes, cellar upgrades, ownership changes, and release performance.",
+      "scoreFunction": {
+        "type": "bounded_sigmoid",
+        "rules": [
+          {
+            "if": "-1 <= value <= 1",
+            "score": "50 + 50 * tanh(0.9 * value)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "modifierRange": [
+        -4,
+        6
+      ],
+      "tavilyExtraction": {
+        "facets": [
+          "vineyard_official",
+          "news",
+          "forum"
+        ],
+        "signals": [
+          "winemaker change",
+          "cellar investment",
+          "ownership change",
+          "prior score momentum",
+          "release performance"
+        ],
+        "minimumIndependentSources": 2
+      },
+      "dynamicEffect": "Reputation momentum adjusts the market-facing score, not the pure vineyard chemistry score.",
+      "sources": [
+        "producer releases",
+        "critic archives",
+        "trade press"
+      ]
+    },
+    {
+      "id": "grape_variety_region_fit",
+      "name": "Grape Variety and Region Fit",
+      "category": "cultivar_market_context",
+      "scoringLayer": "external_modifier",
+      "weight": 0.0,
+      "unit": "index_0_to_1",
+      "window": "vintage planning and current season",
+      "rawValueFormula": "Fit score between dominant grape varieties, appellation rules, soil/terroir context, and the year's climate profile; penalize mismatch such as heat-sensitive variety under severe heat.",
+      "scoreFunction": {
+        "type": "fit_score",
+        "rules": [
+          {
+            "if": "0 <= value <= 1",
+            "score": "100 * value"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "modifierRange": [
+        -8,
+        4
+      ],
+      "tavilyExtraction": {
+        "facets": [
+          "research",
+          "vineyard_official",
+          "government"
+        ],
+        "signals": [
+          "grape variety",
+          "appellation rules",
+          "clone",
+          "rootstock",
+          "terroir fit",
+          "varietal sensitivity"
+        ],
+        "minimumIndependentSources": 2
+      },
+      "dynamicEffect": "Interacts with heat, drought, and cool-night features; poor variety fit under extreme conditions can subtract up to -8 points.",
+      "sources": [
+        "appellation rules",
+        "viticulture research",
+        "producer technical notes"
+      ]
+    },
+    {
+      "id": "cultivar_climate_resilience",
+      "name": "Cultivar Climate Resilience",
+      "category": "cultivar_adaptation_context",
+      "scoringLayer": "external_modifier",
+      "weight": 0.0,
+      "unit": "index_0_to_1",
+      "window": "current season and vineyard adaptation history",
+      "rawValueFormula": "Evidence score for drought tolerance, heat tolerance, disease resistance, rootstock resilience, canopy adaptation, and permitted varietal adaptation.",
+      "scoreFunction": {
+        "type": "resilience_score",
+        "rules": [
+          {
+            "if": "0 <= value <= 1",
+            "score": "100 * value"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "modifierRange": [
+        -6,
+        4
+      ],
+      "tavilyExtraction": {
+        "facets": [
+          "research",
+          "vineyard_official",
+          "government"
+        ],
+        "signals": [
+          "drought tolerance",
+          "heat tolerance",
+          "disease resistance",
+          "rootstock",
+          "canopy management",
+          "permitted varieties"
+        ],
+        "minimumIndependentSources": 2
+      },
+      "dynamicEffect": "Offsets part of climate stress only when evidence is local and specific; otherwise no boost is applied.",
+      "sources": [
+        "viticulture research",
+        "regional technical bulletins",
+        "producer notes"
+      ]
+    },
+    {
+      "id": "certification_sustainability_premium",
+      "name": "Certification and Sustainability Premium",
+      "category": "tavily_market_positioning",
+      "scoringLayer": "external_modifier",
+      "weight": 0.0,
+      "unit": "index_minus1_to_1",
+      "window": "current release year",
+      "rawValueFormula": "Net market signal from organic/biodynamic/regenerative certification, sustainability controversies, pesticide restrictions, or certification loss.",
+      "scoreFunction": {
+        "type": "bounded_sigmoid",
+        "rules": [
+          {
+            "if": "-1 <= value <= 1",
+            "score": "50 + 50 * tanh(value)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "modifierRange": [
+        -5,
+        4
+      ],
+      "tavilyExtraction": {
+        "facets": [
+          "vineyard_official",
+          "news",
+          "government",
+          "forum"
+        ],
+        "signals": [
+          "organic certification",
+          "biodynamic",
+          "regenerative",
+          "sustainability controversy",
+          "certification loss"
+        ],
+        "minimumIndependentSources": 2
+      },
+      "dynamicEffect": "Adds a modest market premium for credible certification; subtracts more when controversy or certification loss damages trust.",
+      "sources": [
+        "certification bodies",
+        "producer releases",
+        "trade press"
+      ]
+    },
+    {
+      "id": "logistics_supply_chain_risk",
+      "name": "Logistics and Supply Chain Risk",
+      "category": "tavily_trade_operations",
+      "scoringLayer": "external_modifier",
+      "weight": 0.0,
+      "unit": "index_0_to_1",
+      "window": "release year",
+      "rawValueFormula": "Risk score from transport strikes, glass/bottle shortages, port delays, warehouse constraints, currency shock, and route disruption affecting release quality perception.",
+      "scoreFunction": {
+        "type": "negative_evidence_score",
+        "rules": [
+          {
+            "if": "0 <= value <= 1",
+            "score": "100 * (1 - value)"
+          }
+        ],
+        "clamp": [
+          0,
+          100
+        ]
+      },
+      "modifierRange": [
+        -7,
+        0
+      ],
+      "tavilyExtraction": {
+        "facets": [
+          "news",
+          "government",
+          "forum"
+        ],
+        "signals": [
+          "transport strike",
+          "glass shortage",
+          "port delay",
+          "warehouse constraint",
+          "currency shock",
+          "export disruption"
+        ],
+        "minimumIndependentSources": 2
+      },
+      "dynamicEffect": "Subtracts up to -7 points from the market-adjusted score when release logistics threaten availability or buyer confidence.",
+      "sources": [
+        "trade press",
+        "logistics news",
+        "customs reports"
+      ]
+    }
+  ],
+  "dynamicAdjustments": [
+    {
+      "id": "market_sentiment_cap",
+      "appliesTo": "market_expectation_sentiment",
+      "formula": "if sentiment_score >= 80 then +min(6, (sentiment_score - 80) / 20 * 6); if sentiment_score <= 35 then -min(10, (35 - sentiment_score) / 35 * 10); else 0",
+      "purpose": "Allow expectations to move the score, but prevent hype from rescuing a climatically poor vintage."
+    },
+    {
+      "id": "compound_heat_drought_penalty",
+      "appliesTo": [
+        "extreme_max_temperature",
+        "dryness_index",
+        "heat_days"
+      ],
+      "formula": "if extreme_max_temperature_score < 45 and dryness_index_score < 45 then -12; else if heat_days_score < 50 and dryness_index_score < 60 then -6; else 0",
+      "purpose": "Capture interaction effects where heat and drought together are worse than either feature alone."
+    },
+    {
+      "id": "rain_disease_penalty",
+      "appliesTo": [
+        "harvest_rain",
+        "flood_excess_rain",
+        "disease_pressure"
+      ],
+      "formula": "if harvest_rain_score < 45 and disease_pressure_score < 60 then -10; else if flood_excess_rain_score < 50 then -6; else 0",
+      "purpose": "Prevent high non-rain features from hiding rot, dilution, and splitting risk."
+    },
+    {
+      "id": "policy_risk_penalty",
+      "appliesTo": "policy_trade_risk",
+      "formula": "if policy_trade_risk_score < 40 then -8; if policy_trade_risk_score < 20 then -15; else 0",
+      "purpose": "Represent non-natural commercial drag from tariffs, regulation, or distribution disruption."
+    },
+    {
+      "id": "policy_support_boost",
+      "appliesTo": "policy_support_signal",
+      "formula": "if policy_support_signal_score >= 70 then +min(5, (policy_support_signal_score - 70) / 30 * 5); else 0",
+      "purpose": "Capture concrete policy tailwinds without allowing politics to overpower vineyard evidence."
+    },
+    {
+      "id": "policy_adverse_penalty",
+      "appliesTo": "policy_adverse_signal",
+      "formula": "if policy_adverse_signal_score <= 60 then -min(10, (60 - policy_adverse_signal_score) / 60 * 10); else 0",
+      "purpose": "Penalize tariffs, restrictions, disputes, or regulation that directly harms production, release, or demand."
+    },
+    {
+      "id": "public_and_critic_expectation_adjustment",
+      "appliesTo": [
+        "public_expectation_momentum",
+        "critic_pre_release_signal"
+      ],
+      "formula": "positive = min(10, max(0, public_expectation_points) + max(0, critic_pre_release_points)); negative = max(-9, min(0, public_expectation_points) + min(0, critic_pre_release_points)); return positive + negative",
+      "purpose": "Let public and expert expectation move the market-facing score while keeping upside bounded."
+    },
+    {
+      "id": "trade_liquidity_adjustment",
+      "appliesTo": "trade_liquidity_demand",
+      "formula": "if trade_liquidity_demand_score >= 70 then +min(5, (trade_liquidity_demand_score - 70) / 30 * 5); if trade_liquidity_demand_score <= 45 then -min(8, (45 - trade_liquidity_demand_score) / 45 * 8); else 0",
+      "purpose": "Reflect asymmetric commercial risk: weak demand hurts more than strong demand helps."
+    },
+    {
+      "id": "variety_fit_climate_interaction",
+      "appliesTo": [
+        "grape_variety_region_fit",
+        "cultivar_climate_resilience",
+        "gst",
+        "extreme_max_temperature",
+        "dryness_index"
+      ],
+      "formula": "if grape_variety_region_fit_score < 45 and (extreme_max_temperature_score < 55 or dryness_index_score < 50) then -8; else if cultivar_climate_resilience_score > 75 and gst_score > 55 then +min(4, (cultivar_climate_resilience_score - 75) / 25 * 4); else 0",
+      "purpose": "Model variety-specific sensitivity so grape type, rootstock, and adaptation matter when weather becomes stressful."
+    },
+    {
+      "id": "reputation_and_sustainability_adjustment",
+      "appliesTo": [
+        "chateau_reputation_momentum",
+        "certification_sustainability_premium"
+      ],
+      "formula": "return clamp(chateau_reputation_points + certification_sustainability_points, -7, 8)",
+      "purpose": "Apply bounded market trust effects from producer reputation, certification, and sustainability credibility."
+    },
+    {
+      "id": "logistics_supply_chain_penalty",
+      "appliesTo": "logistics_supply_chain_risk",
+      "formula": "if logistics_supply_chain_risk_score <= 65 then -min(7, (65 - logistics_supply_chain_risk_score) / 65 * 7); else 0",
+      "purpose": "Account for release-year operational friction that affects availability and perceived vintage success."
+    }
+  ],
+  "dataSourceHints": [
+    {
+      "featureIds": [
+        "gst",
+        "harvest_rain",
+        "dryness_index",
+        "huglin_index",
+        "cool_night_index",
+        "winter_rain",
+        "heat_days",
+        "extreme_max_temperature",
+        "flood_excess_rain",
+        "flowering_rain",
+        "diurnal_temperature_range"
+      ],
+      "preferredSources": [
+        "Copernicus ERA5-Land",
+        "Meteo-France",
+        "NASA POWER",
+        "Open-Meteo"
+      ]
+    },
+    {
+      "featureIds": [
+        "flowering_day",
+        "veraison_day"
+      ],
+      "preferredSources": [
+        "PEP725",
+        "regional phenology observations",
+        "GFV model estimates"
+      ]
+    },
+    {
+      "featureIds": [
+        "yield"
+      ],
+      "preferredSources": [
+        "CIVB annual reports",
+        "appellation reports"
+      ]
+    },
+    {
+      "featureIds": [
+        "market_expectation_sentiment",
+        "public_expectation_momentum",
+        "critic_pre_release_signal",
+        "trade_liquidity_demand",
+        "chateau_reputation_momentum",
+        "certification_sustainability_premium",
+        "logistics_supply_chain_risk"
+      ],
+      "preferredSources": [
+        "expert preview notes",
+        "Liv-ex",
+        "CellarTracker",
+        "Wine Advocate",
+        "Vinous",
+        "public media sentiment"
+      ]
+    },
+    {
+      "featureIds": [
+        "policy_trade_risk",
+        "policy_support_signal",
+        "policy_adverse_signal"
+      ],
+      "preferredSources": [
+        "OIV reports",
+        "customs and tariff notices",
+        "trade association reports"
+      ]
+    },
+    {
+      "featureIds": [
+        "grape_variety_region_fit",
+        "cultivar_climate_resilience"
+      ],
+      "preferredSources": [
+        "appellation rules",
+        "producer technical sheets",
+        "viticulture research",
+        "regional climate adaptation reports",
+        "Tavily public web search"
+      ]
+    }
+  ],
+  "researchNotes": [
+    {
+      "topic": "weather_quality",
+      "note": "Bordeaux vintage quality is strongly linked to seasonal weather patterns, but the model should preserve non-linear thresholds for extreme heat, harvest rain, drought, and phenological timing.",
+      "references": [
+        "https://www.sciencedirect.com/science/article/pii/S258900422302031X",
+        "https://www.frontiersin.org/articles/10.3389/fenvs.2022.1020867/full"
+      ]
+    },
+    {
+      "topic": "expert_and_reputation_signals",
+      "note": "Expert scores, chateau reputation, and other observable market signals affect Bordeaux prices and expectations; they should be modeled as bounded commercial adjustments, not as substitutes for grape quality.",
+      "references": [
+        "https://www.cambridge.org/core/journals/journal-of-wine-economics/article/value-of-expert-opinion-in-the-pricing-of-bordeaux-wine-futures/0AF780ED9B43558C96B2C5070F1038C8",
+        "https://www.cambridge.org/core/journals/journal-of-wine-economics/article/ratings-meet-prices-the-dynamic-relationship-of-quality-signals/333B63BE0D08FE4C6105C4494F074786"
+      ]
+    },
+    {
+      "topic": "policy_trade_risk",
+      "note": "Tariffs and trade disruption are external commercial risks; they belong in a market-adjusted vintage score rather than a pure vineyard chemistry score.",
+      "references": [
+        "https://www.oiv.int/press/state-world-wine-sector-2025-tariffs-climate-and-consumer-trends-drive-sector-adaptation",
+        "https://www.oiv.int/index.php/what-we-do/statistics"
+      ]
+    },
+    {
+      "topic": "tavily_external_features",
+      "note": "External public-web features should be treated as bounded modifiers. They are useful for policy, expectation, reputation, variety-context, and trade-demand signals, but they should not replace measured climate and vineyard observations.",
+      "references": [
+        "https://www.oiv.int/what-we-do/statistics",
+        "https://www.liv-ex.com/news-insights/"
+      ]
+    }
+  ],
+  "tavilyAgentFeatureContract": {
+    "purpose": "Extract non-natural, external, and cultivar-context features from public web evidence for market-adjusted vintage scoring.",
+    "outputShape": {
+      "featureId": "string matching one external_modifier feature id",
+      "rawValue": "number in the feature unit range",
+      "confidence": "0..1 evidence confidence",
+      "evidence": [
+        {
+          "sourceType": "government | vineyard_official | news | forum | research | market",
+          "title": "string",
+          "url": "string",
+          "publishedAt": "ISO date when available",
+          "snippet": "short supporting quote or paraphrase"
+        }
+      ]
+    },
+    "sourceReliabilityWeights": {
+      "government": 1.0,
+      "research": 0.9,
+      "vineyard_official": 0.75,
+      "market": 0.75,
+      "news": 0.65,
+      "forum": 0.35
+    },
+    "rules": [
+      "Require at least two independent sources for high-impact positive modifiers.",
+      "Allow one official government or appellation source to trigger policy_adverse_signal when the notice is explicit and recent.",
+      "Do not let public hype override hardEventGates.",
+      "Record source type and recency so the dashboard can explain why an external modifier moved the score."
+    ]
+  }
+}

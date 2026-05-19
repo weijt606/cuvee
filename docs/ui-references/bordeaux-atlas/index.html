@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Bordeaux 1855 Classification — 61 Châteaux interactive atlas." />
+    <meta name="theme-color" content="#050505" />
+    <title>Bordeaux 1855 · 61 Châteaux Atlas</title>
+    <link rel="stylesheet" href="vendor/leaflet.css" />
+    <style>
+      /* === Palette inherits the zm-studio language: near-black canvas, neutral grays,
+         24px radii, uppercase pill chips, 1.9px stroke icons. Accent ramp uses
+         a wine progression (gold → oak) to encode the 1855 classification. ===  */
+      :root {
+        --bg: #050505;
+        --panel: rgba(10, 10, 10, 0.82);
+        --panel-strong: rgba(15, 15, 15, 0.96);
+        --panel-border: rgba(90, 90, 90, 0.22);
+        --line: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.14);
+        --text: #f5f5f5;
+        --muted: #a3a3a3;
+        --soft: #737373;
+        --accent: #d4d4d4;
+        --surface-1: rgba(255, 255, 255, 0.03);
+        --surface-2: rgba(255, 255, 255, 0.05);
+        --surface-3: rgba(255, 255, 255, 0.08);
+        --surface-4: rgba(255, 255, 255, 0.12);
+        --shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+        --radius: 24px;
+        --radius-sm: 14px;
+        --scrollbar-thumb: #2f2f2f;
+
+        --cru-1: #e6b450;
+        --cru-2: #d97757;
+        --cru-3: #b33951;
+        --cru-4: #7c2d3e;
+        --cru-5: #4a1f2a;
+
+        --map-filter: invert(0) hue-rotate(0deg) brightness(1);
+        color-scheme: dark;
+      }
+
+      :root[data-theme="light"] {
+        --bg: #f6f5f2;
+        --panel: rgba(255, 255, 255, 0.92);
+        --panel-strong: rgba(255, 255, 255, 0.98);
+        --panel-border: rgba(0, 0, 0, 0.12);
+        --line: rgba(0, 0, 0, 0.08);
+        --line-strong: rgba(0, 0, 0, 0.14);
+        --text: #111111;
+        --muted: #57534e;
+        --soft: #78716c;
+        --accent: #1a1a1a;
+        --surface-1: rgba(0, 0, 0, 0.03);
+        --surface-2: rgba(0, 0, 0, 0.05);
+        --surface-3: rgba(0, 0, 0, 0.08);
+        --surface-4: rgba(0, 0, 0, 0.12);
+        --shadow: 0 24px 70px rgba(0, 0, 0, 0.1);
+        --scrollbar-thumb: #c8c5be;
+        color-scheme: light;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Avenir Next", "Helvetica Neue", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        overflow: hidden;
+      }
+
+      a {
+        color: inherit;
+      }
+      button {
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      input {
+        font: inherit;
+        color: inherit;
+      }
+
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--scrollbar-thumb);
+        border-radius: 999px;
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: 320px 1fr 380px;
+        grid-template-rows: 64px 1fr;
+        grid-template-areas:
+          "topbar topbar topbar"
+          "left   map    right";
+        height: 100vh;
+        gap: 0;
+      }
+
+      /* ============ Top bar ============ */
+      .topbar {
+        grid-area: topbar;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 28px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+        backdrop-filter: blur(20px);
+        z-index: 30;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+      }
+      .brand-mark {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+      }
+      .brand-mark svg {
+        width: 22px;
+        height: 22px;
+        stroke: currentColor;
+        stroke-width: 1.9;
+        fill: none;
+        transition: transform 0.6s ease;
+      }
+      .brand:hover .brand-mark svg {
+        transform: rotate(90deg);
+      }
+      .brand-name {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      .brand-sub {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--soft);
+        margin-left: 4px;
+      }
+
+      .topbar-stats {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+        margin-left: auto;
+      }
+      .stat-chip {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 8px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface-1);
+      }
+      .stat-num {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .stat-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--soft);
+      }
+
+      .icon-btn {
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--surface-1);
+        transition: background 0.18s ease, border-color 0.18s ease;
+      }
+      .icon-btn:hover {
+        background: var(--surface-3);
+        border-color: var(--line-strong);
+      }
+      .icon-btn svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        stroke-width: 1.9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
+      }
+      :root[data-theme="light"] .icon-btn .icon-moon { display: none; }
+      :root[data-theme="dark"]  .icon-btn .icon-sun  { display: none; }
+
+      /* ============ Sidebar (left) ============ */
+      .sidebar {
+        grid-area: left;
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .panel-section {
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      .panel-section + .panel-section.scrollable {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding-top: 8px;
+      }
+      .panel-kicker {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: var(--soft);
+        margin-bottom: 12px;
+      }
+
+      .search {
+        position: relative;
+      }
+      .search input {
+        width: 100%;
+        height: 38px;
+        padding: 0 14px 0 38px;
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        outline: none;
+        transition: border-color 0.18s ease, background 0.18s ease;
+      }
+      .search input:focus {
+        border-color: var(--line-strong);
+        background: var(--surface-3);
+      }
+      .search input::placeholder {
+        color: var(--soft);
+      }
+      .search svg {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 16px;
+        height: 16px;
+        stroke: var(--soft);
+        stroke-width: 1.9;
+        fill: none;
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--surface-1);
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: all 0.18s ease;
+      }
+      .chip:hover {
+        color: var(--text);
+        border-color: var(--line-strong);
+      }
+      .chip[data-active="true"] {
+        background: var(--surface-4);
+        color: var(--text);
+        border-color: var(--line-strong);
+      }
+      .chip .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .chip-count {
+        font-size: 9px;
+        color: var(--soft);
+        margin-left: 2px;
+        letter-spacing: 0.12em;
+      }
+
+      .list {
+        display: flex;
+        flex-direction: column;
+      }
+      .list-item {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+        transition: background 0.18s ease;
+      }
+      .list-item:hover {
+        background: var(--surface-2);
+      }
+      .list-item[data-selected="true"] {
+        background: var(--surface-3);
+      }
+      .list-item[data-selected="true"]::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--text);
+      }
+      .list-item { position: relative; }
+      .list-marker {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      .list-name {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        line-height: 1.2;
+      }
+      .list-meta {
+        font-size: 10px;
+        color: var(--soft);
+        margin-top: 2px;
+        letter-spacing: 0.06em;
+      }
+      .list-cru {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        color: var(--muted);
+      }
+      .list-empty {
+        padding: 32px 20px;
+        text-align: center;
+        font-size: 12px;
+        color: var(--soft);
+      }
+
+      /* ============ Map ============ */
+      .map-shell {
+        grid-area: map;
+        position: relative;
+        background: var(--bg);
+      }
+      #map {
+        position: absolute;
+        inset: 0;
+        background: var(--bg);
+      }
+      .leaflet-container {
+        background: var(--bg);
+        font-family: inherit;
+      }
+      :root[data-theme="dark"] .leaflet-tile {
+        filter: brightness(0.95) contrast(1.05);
+      }
+      .leaflet-control-zoom a {
+        background: var(--panel-strong) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--line) !important;
+        backdrop-filter: blur(10px);
+      }
+      .leaflet-control-attribution {
+        background: var(--panel) !important;
+        color: var(--soft) !important;
+        font-size: 10px !important;
+        backdrop-filter: blur(8px);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 2px 8px !important;
+      }
+      .leaflet-control-attribution a {
+        color: var(--muted) !important;
+      }
+
+      /* SVG-styled marker, sized by Cru */
+      .chateau-marker {
+        background: transparent !important;
+        border: none !important;
+      }
+      .chateau-dot {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        position: relative;
+        transition: transform 0.18s ease;
+      }
+      .chateau-dot::after {
+        content: "";
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        opacity: 0;
+        transition: opacity 0.18s ease, inset 0.18s ease;
+      }
+      .chateau-marker:hover .chateau-dot {
+        transform: scale(1.25);
+      }
+      .chateau-marker:hover .chateau-dot::after {
+        opacity: 1;
+        inset: -6px;
+      }
+      .chateau-marker[data-selected="true"] .chateau-dot {
+        transform: scale(1.45);
+      }
+      .chateau-marker[data-selected="true"] .chateau-dot::after {
+        opacity: 1;
+        inset: -8px;
+        border-color: var(--text);
+        border-width: 1.5px;
+      }
+
+      .chateau-tip {
+        position: absolute;
+        top: -36px;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        padding: 4px 10px;
+        background: var(--panel-strong);
+        border: 1px solid var(--line);
+        color: var(--text);
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.18s ease;
+        backdrop-filter: blur(8px);
+      }
+      .chateau-marker:hover .chateau-tip,
+      .chateau-marker[data-selected="true"] .chateau-tip {
+        opacity: 1;
+      }
+
+      /* Floating legend */
+      .legend {
+        position: absolute;
+        bottom: 22px;
+        left: 22px;
+        z-index: 400;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+        backdrop-filter: blur(14px);
+        box-shadow: var(--shadow);
+        min-width: 220px;
+      }
+      .legend-kicker {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        color: var(--soft);
+        margin-bottom: 12px;
+      }
+      .legend-row {
+        display: grid;
+        grid-template-columns: 16px 1fr auto;
+        align-items: center;
+        gap: 10px;
+        padding: 5px 0;
+        font-size: 11px;
+        color: var(--muted);
+        cursor: pointer;
+        transition: color 0.18s ease;
+      }
+      .legend-row:hover {
+        color: var(--text);
+      }
+      .legend-row[data-active="false"] {
+        opacity: 0.4;
+      }
+      .legend-swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        justify-self: center;
+      }
+      .legend-count {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--soft);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ============ Detail panel (right) ============ */
+      .detail {
+        grid-area: right;
+        background: var(--panel);
+        border-left: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: auto;
+      }
+      .detail-empty {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 14px;
+        padding: 40px 28px;
+        text-align: center;
+        color: var(--soft);
+      }
+      .detail-empty svg {
+        width: 36px;
+        height: 36px;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        fill: none;
+        opacity: 0.5;
+      }
+      .detail-empty-title {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .detail-empty-copy {
+        font-size: 12px;
+        line-height: 1.6;
+        max-width: 240px;
+      }
+
+      .detail-head {
+        padding: 28px 28px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      .detail-cru-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--text);
+        background: var(--surface-3);
+        border: 1px solid var(--line);
+      }
+      .detail-cru-pill .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .detail-name {
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        margin: 14px 0 6px;
+        line-height: 1.15;
+      }
+      .detail-sub {
+        font-size: 12px;
+        color: var(--soft);
+        letter-spacing: 0.06em;
+      }
+
+      .detail-body {
+        padding: 22px 28px 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .detail-about {
+        font-size: 13px;
+        line-height: 1.62;
+        color: var(--muted);
+        letter-spacing: 0.005em;
+      }
+      .detail-about p {
+        margin: 0;
+      }
+      .detail-about-source {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 8px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--soft);
+        text-decoration: none;
+        transition: color 0.18s ease;
+      }
+      .detail-about-source:hover { color: var(--text); }
+      .detail-about-source svg {
+        width: 10px;
+        height: 10px;
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+      }
+      .detail-block-title {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: var(--soft);
+        margin-bottom: 10px;
+      }
+      .kv-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1px;
+        background: var(--line);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+      }
+      .kv-cell {
+        background: var(--panel-strong);
+        padding: 12px 14px;
+      }
+      .kv-label {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--soft);
+        margin-bottom: 4px;
+      }
+      .kv-value {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        font-variant-numeric: tabular-nums;
+      }
+      .kv-unit {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--muted);
+        margin-left: 3px;
+      }
+
+      .soil-bar {
+        display: flex;
+        height: 10px;
+        border-radius: 999px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: var(--surface-1);
+      }
+      .soil-seg { height: 100%; transition: width 0.3s ease; }
+      .soil-clay { background: #8c6a4a; }
+      .soil-sand { background: #d6b072; }
+      .soil-silt { background: #6e8a8a; }
+      .soil-legend {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 10px;
+        font-size: 10px;
+        color: var(--muted);
+        letter-spacing: 0.08em;
+      }
+      .soil-legend span b {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+      .soil-na {
+        font-size: 11px;
+        color: var(--soft);
+        font-style: italic;
+        padding: 8px 0;
+      }
+
+      .links-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .link-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: var(--surface-1);
+        color: var(--muted);
+        font-size: 11px;
+        text-decoration: none;
+        transition: all 0.18s ease;
+      }
+      .link-pill:hover {
+        background: var(--surface-3);
+        color: var(--text);
+        border-color: var(--line-strong);
+      }
+      .link-pill svg {
+        width: 12px;
+        height: 12px;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        fill: none;
+      }
+
+      /* Compact viewport handling */
+      @media (max-width: 1180px) {
+        .app {
+          grid-template-columns: 280px 1fr 320px;
+        }
+      }
+      @media (max-width: 960px) {
+        .app {
+          grid-template-columns: 1fr;
+          grid-template-rows: 64px 1fr;
+          grid-template-areas:
+            "topbar"
+            "map";
+        }
+        .sidebar, .detail { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- ============ Top bar ============ -->
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Bordeaux Atlas">
+          <span class="brand-mark">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 3v6c0 2.2 1.8 4 4 4s4-1.8 4-4V3" />
+              <path d="M12 13v8" />
+              <path d="M9 21h6" />
+              <path d="M8 3h8" />
+            </svg>
+          </span>
+          <span class="brand-name">Bordeaux 1855</span>
+          <span class="brand-sub">Atlas</span>
+        </a>
+
+        <div class="topbar-stats">
+          <div class="stat-chip">
+            <span class="stat-num" id="statCount">61</span>
+            <span class="stat-label">Châteaux</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-num" id="statAoc">—</span>
+            <span class="stat-label">AOC</span>
+          </div>
+          <div class="stat-chip">
+            <span class="stat-num" id="statElev">—</span>
+            <span class="stat-label">Avg Elev (m)</span>
+          </div>
+          <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle theme">
+            <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />
+            </svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 3v2" />
+              <path d="M12 19v2" />
+              <path d="M3 12h2" />
+              <path d="M19 12h2" />
+              <path d="m5.6 5.6 1.4 1.4" />
+              <path d="m17 17 1.4 1.4" />
+              <path d="m5.6 18.4 1.4-1.4" />
+              <path d="m17 7 1.4-1.4" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- ============ Left sidebar ============ -->
+      <aside class="sidebar">
+        <div class="panel-section">
+          <div class="panel-kicker">Search</div>
+          <label class="search">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input id="searchInput" type="search" placeholder="Château, commune, AOC…" />
+          </label>
+        </div>
+
+        <div class="panel-section">
+          <div class="panel-kicker">Growth · Cru</div>
+          <div class="chip-row" id="cruChips"></div>
+        </div>
+
+        <div class="panel-section">
+          <div class="panel-kicker">Appellation</div>
+          <div class="chip-row" id="aocChips"></div>
+        </div>
+
+        <div class="panel-section scrollable">
+          <div class="list" id="chateauList"></div>
+        </div>
+      </aside>
+
+      <!-- ============ Map ============ -->
+      <main class="map-shell">
+        <div id="map"></div>
+        <div class="legend">
+          <div class="legend-kicker">1855 Classification</div>
+          <div id="legendRows"></div>
+        </div>
+      </main>
+
+      <!-- ============ Right detail ============ -->
+      <aside class="detail" id="detailPanel">
+        <div class="detail-empty" id="detailEmpty">
+          <svg viewBox="0 0 24 24"><path d="M12 21s-7-5.5-7-11a7 7 0 1 1 14 0c0 5.5-7 11-7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg>
+          <div>
+            <div class="detail-empty-title">Select A Château</div>
+            <div class="detail-empty-copy">点地图上的任意一个酒庄，查看 AOC、海拔、距吉伦特河 / 大西洋距离与土壤构成。</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <script src="vendor/leaflet.js"></script>
+    <script id="descriptions-data" type="application/json">{"Château Haut-Brion":{"i":"Château Haut-Brion is a French wine estate of Bordeaux wine, rated a Premier Grand Cru Classé, located in Pessac just outside the city of Bordeaux. It differs from the other wines on the list in its geographic location in the north of the wine-growing region of Graves.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Haut-Brion","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Pessac_Ch%C3%A2teau_Haut-Brion.jpg/330px-Pessac_Ch%C3%A2teau_Haut-Brion.jpg"},"Château Lafite Rothschild":{"i":"Château Lafite Rothschild is a French wine estate of Bordeaux wine, located in Pauillac in France, owned by members of the Rothschild family since the 19th century, and rated as a First Growth under the 1855 Bordeaux Classification.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Lafite_Rothschild","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Ch%C3%A2teau_Lafite-Rothschild.jpg/330px-Ch%C3%A2teau_Lafite-Rothschild.jpg"},"Château Latour":{"i":"Château Latour is a French wine estate, rated as a First Growth under the 1855 Bordeaux Classification.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Latour","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Ch%C3%A2teau_La_Tour.jpg/330px-Ch%C3%A2teau_La_Tour.jpg"},"Château Margaux":{"i":"Château Margaux, archaically La Mothe de Margaux, is a wine estate of Bordeaux wine located in Margaux-Cantenac, France, and was one of five wines to achieve Premier cru  status in the Bordeaux Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Margaux","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Margaux_exterior.jpg/330px-Margaux_exterior.jpg"},"Château Mouton Rothschild":{"i":"Château Mouton Rothschild is a wine estate located in the village of Pauillac in the Médoc region, 50 km (30 mi) north-west of the city of Bordeaux, France. Originally known as Château Brane-Mouton, its red wine was renamed by Nathaniel de Rothschild in 1853 to Château Mouton Rothschild.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Mouton_Rothschild","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Ch%C3%A2teau_Mouton_Rothschild_x.jpg/330px-Ch%C3%A2teau_Mouton_Rothschild_x.jpg"},"Château Brane-Cantenac":{"i":"Château Brane-Cantenac is a winery in the Margaux appellation of the Bordeaux wine region of France. The wine produced here was classified as one of fifteen Deuxièmes Crus in the original Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Brane-Cantenac","t":null},"Château Cos d'Estournel":{"i":"Château Cos d'Estournel is a winery in the Saint-Estèphe appellation of the Bordeaux region of France. It is also the name of the red wine produced by this property. The wine produced here was classified as one of fifteen Deuxièmes Crus in the original Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Cos_d'Estournel","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Vinbieno_Ch%C3%A2teau_Cos_d%27Estournel_07.jpg/330px-Vinbieno_Ch%C3%A2teau_Cos_d%27Estournel_07.jpg"},"Château Ducru-Beaucaillou":{"i":"Château Ducru-Beaucaillou is a winery in the Saint-Julien appellation of the Bordeaux region of France. Château Ducru-Beaucaillou is also the name of the red wine produced by this property.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Ducru-Beaucaillou","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Cork_of_Ch%C3%A2teau_Ducru-Beaucaillou_1990.jpg/330px-Cork_of_Ch%C3%A2teau_Ducru-Beaucaillou_1990.jpg"},"Château Durfort-Vivens":{"i":"Château Durfort-Vivens is a winery in the Margaux appellation of the Bordeaux region of France. It is also the name of the red wine produced by this property. The wine produced here was classified as one of fifteen Deuxièmes Crus in the original Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Durfort-Vivens","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Ch%C3%A2teau_Durfort-Vivens_2005.jpg/330px-Ch%C3%A2teau_Durfort-Vivens_2005.jpg"},"Château Gruaud-Larose":{"i":"Château Gruaud-Larose is a winery in the Saint-Julien appellation of the Bordeaux region of France. It is also the name of the red wine produced by this property. The wine produced here was classified as one of fifteen Deuxièmes Crus in the original Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Gruaud-Larose","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Ch%C3%A2teau_Gruaud-Larose_67_detail.JPG/330px-Ch%C3%A2teau_Gruaud-Larose_67_detail.JPG"},"Château Lascombes":{"i":"Château Lascombes is a winery in the Margaux appellation of the Bordeaux region of France. The wine produced here was classified as one of fifteen Seconds Crus in the original Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Lascombes","t":null},"Château Léoville-Barton":{"i":"Château Léoville Barton is a vineyard in the Saint-Julien appellation of the Bordeaux region of France. Château Léoville Barton is also the name of the red wine produced by this property.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_L%C3%A9oville_Barton","t":null},"Château Léoville-Las Cases":{"i":"Château Léoville-Las Cases is a winery in the Saint-Julien appellation of the Bordeaux region of France. Château Léoville-Las Cases is also the name of the red wine produced by this property.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_L%C3%A9oville-Las_Cases","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Lynch_Bages_1970%3B_Leoville-Las-Cases_1970_in_decanters.jpg/330px-Lynch_Bages_1970%3B_Leoville-Las-Cases_1970_in_decanters.jpg"},"Château Léoville-Poyferré":{"i":"Château Léoville-Poyferré is a winery in the Saint-Julien appellation of the Bordeaux region of France. Château Léoville-Poyferré is also the name of the red wine produced by this property.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_L%C3%A9oville-Poyferr%C3%A9","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Leoville_Poyferre_2006.jpg/330px-Leoville_Poyferre_2006.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail"},"Château Montrose":{"i":"Château Montrose is a winery in the Saint-Estèphe appellation of the Bordeaux region of France. The wine produced here was classified as one of fifteen Deuxièmes Crus in the original Bordeaux Wine Official Classification of 1855. Since 2006, Olivier and Martin Bouygues own this winery.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Montrose","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Ch%C3%A2teau_Montrose_1981.jpg/330px-Ch%C3%A2teau_Montrose_1981.jpg"},"Château Pichon Longueville Baron":{"i":"Château Pichon Longueville Baron or Château Longueville au Baron de Pichon-Longueville is a winery in the Pauillac appellation of the Bordeaux region of France. Château Pichon Longueville Baron is also the name of the red wine produced by this property.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Pichon_Longueville_Baron","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/7/74/Pichon01.jpg/330px-Pichon01.jpg"},"Château Pichon Longueville Comtesse de Lalande":{"i":"Château Pichon Longueville Comtesse de Lalande is a winery in the Pauillac appellation of the Bordeaux region of France. Château Pichon Longueville Comtesse de Lalande is also the name of the red wine produced by this property.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Pichon_Longueville_Comtesse_de_Lalande","t":null},"Château Rauzan-Gassies":{"i":"Château Rauzan-Gassies is a winery in the Margaux appellation of the Bordeaux region of France. Château Rauzan-Gassies is also the name of the red wine produced by this property. The wine produced here was classified as one of fifteen Deuxièmes Crus in the original Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Rauzan-Gassies","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Ch%C3%A2teau_Rauzan-Gassies.jpg/330px-Ch%C3%A2teau_Rauzan-Gassies.jpg"},"Château Rauzan-Ségla":{"i":"Château Rauzan-Ségla, or Château Rausan-Ségla, is a winery in the Margaux appellation of the Bordeaux region of France. Château Rauzan-Ségla is also the name of the red wine produced by this property.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Rauzan-S%C3%A9gla","t":null},"Château Boyd-Cantenac":{"i":"Château Boyd-Cantenac is a winery in the Margaux appellation of the Bordeaux region of France. The wine produced here was classified as one of fourteen Troisièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Boyd-Cantenac","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Ch%C3%A2teau_Boyd-Cantenac_1985_J1.jpg/330px-Ch%C3%A2teau_Boyd-Cantenac_1985_J1.jpg"},"Château Calon-Ségur":{"i":"Château Calon-Ségur is a winery in the Saint-Estèphe appellation of the Bordeaux wine region of France. The wine produced here was classified as one of fourteen Troisièmes Crus Classés in the historic Bordeaux Wine Official Classification of 1855. It is the northernmost classified growth in the Médoc.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Calon-S%C3%A9gur","t":"https://upload.wikimedia.org/wikipedia/en/5/5b/Ch%C3%A2teau_Calon-S%C3%A9gur_logo.jpg"},"Château Cantenac-Brown":{"i":"Château Cantenac Brown is a winery located in Cantenac in the Bordeaux region of France. As a wine of the Margaux appellation, it was classified as one of fourteen Third Growths in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Cantenac-Brown","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Cantenac-brown-genese-ecossaise.jpg/330px-Cantenac-brown-genese-ecossaise.jpg"},"Château Desmirail":{"i":" Château Desmirail is a winery in the Margaux appellation of the Bordeaux wine region of France. It was classified as one of fourteen Troisièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Desmirail","t":null},"Château Ferrière":{"i":"Château Ferrière is a winery in the Margaux appellation of the Bordeaux region of France. The wine produced here was classified as one of fourteen Troisièmes Crus in the historic Bordeaux Wine Official Classification of 1855. The Château has 29 acres (12 ha) planted with Cabernet Sauvignon, Merlot and Cabernet Franc.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Ferri%C3%A8re","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Cork_of_Chateau_Ferriere.jpg/330px-Cork_of_Chateau_Ferriere.jpg"},"Château Giscours":{"i":"Château Giscours is a winery in the Margaux appellation of the Bordeaux region of France. The wine produced here was classified as one of fourteen Troisièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Giscours","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Chateau_Giscours.jpg/330px-Chateau_Giscours.jpg"},"Château Kirwan":{"i":"Château Kirwan is a winery in the Margaux appellation of the Bordeaux region of France. The wine produced here was classified as one of fourteen Troisièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Kirwan","t":null},"Château La Lagune":{"i":"Château La Lagune is a winery in the Haut-Médoc appellation of the Bordeaux region of France. The wine produced here was classified as one of fourteen Troisièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_La_Lagune","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Ch%C3%A2teau_La_Lagune.jpg/330px-Ch%C3%A2teau_La_Lagune.jpg"},"Château Lagrange":{"i":"Château Lagrange is a winery in the Saint-Julien appellation of the Bordeaux region of France, and is also the name of the red wine produced by this property. It is owned by the Japanese liquor giant Suntory.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Lagrange","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/180628_LAGRANGE_0982.jpg/330px-180628_LAGRANGE_0982.jpg"},"Château Langoa-Barton":{"i":"Château Langoa-Barton is a winery in the Saint-Julien appellation of the Bordeaux region of France. Château Langoa-Barton is also the name of the red wine produced by this property. The wine produced here was classified as one of fourteen Troisièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Langoa-Barton","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Ch%C3%A2teau_Langoa-Barton_2006.jpg/330px-Ch%C3%A2teau_Langoa-Barton_2006.jpg"},"Château Malescot St. Exupéry":{"i":"Château Malescot St. Exupéry is a winery in the Margaux appellation of the Bordeaux region of France. The wine produced here was classified as one of fourteen Troisièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Malescot_St._Exup%C3%A9ry","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/Ch%C3%A2teau_Malescot_St._Exup%C3%A9ry.jpg/330px-Ch%C3%A2teau_Malescot_St._Exup%C3%A9ry.jpg"},"Château Marquis d'Alesme Becker":{"i":"Château Marquis d'Alesme Becker is a winery in the Margaux appellation of the Bordeaux wine region of France. The wine produced here was classified as one of fourteen Troisièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Marquis_d'Alesme_Becker","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Ch%C3%A2teau_Desmirail_-_Cocks%26F%C3%A9ret_1886.jpg/330px-Ch%C3%A2teau_Desmirail_-_Cocks%26F%C3%A9ret_1886.jpg"},"Château Palmer":{"i":"Château Palmer is a winery in the Margaux appellation d'origine contrôlée of the Bordeaux region of France. The wine produced here was classified as one of fourteen Troisièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Palmer","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Ch%C3%A2teau_Palmer_28_detail.JPG/330px-Ch%C3%A2teau_Palmer_28_detail.JPG"},"Château d'Issan":{"i":"Château d'Issan is a castle and winery in the Margaux appellation of the Bordeaux region of France. The wine produced here was classified as one of fourteen Troisièmes Crus in the historic Bordeaux Wine Official Classification of 1855. The winery is under the proprietorship of Emmanuel Cruse, of the Cruse family.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_d'Issan","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/Cantenac%2C_Gironde%2C_ch%C3%A2teau_d%E2%80%99issan_bu_IMG_1454.jpg/330px-Cantenac%2C_Gironde%2C_ch%C3%A2teau_d%E2%80%99issan_bu_IMG_1454.jpg"},"Château Beychevelle":{"i":"Château Beychevelle is a winery in the Saint-Julien appellation of the Bordeaux region of France. The wine produced here was classified as one of ten Quatrièmes Crus in the historic Bordeaux Wine Official Classification of 1855. The chateau makes a second label wine called Amiral de Beychevelle.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Beychevelle","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Ch%C3%A2teau_Beychevelle_cork.jpg/330px-Ch%C3%A2teau_Beychevelle_cork.jpg"},"Château Branaire-Ducru":{"i":"Château Branaire is a winery in the Saint-Julien appellation of the Bordeaux region of France. Château Branaire is also the name of the main red wine produced by this property and which was classified as one of the ten 'Fourth Growths' in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Branaire-Ducru","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Chateau_Branaire_Ducru.jpg/330px-Chateau_Branaire_Ducru.jpg"},"Château Duhart-Milon":{"i":"Château Duhart-Milon, previously also Château Duhart-Milon-Rothschild, is a winery in the Pauillac appellation of the Bordeaux region of France.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Duhart-Milon","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Ch%C3%A2teau_Duhart-Milon_-_Cocks%26F%C3%A9ret_1898.jpg/330px-Ch%C3%A2teau_Duhart-Milon_-_Cocks%26F%C3%A9ret_1898.jpg"},"Château La Tour Carnet":{"i":"Château La Tour Carnet is a Bordeaux wine estate in the appellation Haut-Médoc. The wine produced here was classified as one of ten Quatrièmes Crus in the historic Bordeaux Wine Official Classification of 1855, at the time known by the name of Carnet.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_La_Tour_Carnet","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Entr%C3%A9e_Ch%C3%A2teau_La_Tour_Carnet.jpg/330px-Entr%C3%A9e_Ch%C3%A2teau_La_Tour_Carnet.jpg"},"Château Lafon-Rochet":{"i":"Château Lafon-Rochet is a winery in the Saint-Estèphe appellation of the Bordeaux region of France. The wine produced here was classified as one of ten Quatrièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Lafon-Rochet","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Cork_of_Ch%C3%A2teau_Lafon-Rochet_2013.jpg/330px-Cork_of_Ch%C3%A2teau_Lafon-Rochet_2013.jpg"},"Château Marquis de Terme":{"i":"Château Marquis de Terme is a winery in the Margaux appellation of the Bordeaux region of France. The wine produced here was classified as one of ten Quatrièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Marquis_de_Terme","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/Ch%C3%A2teau_Marquis_de_Terme_1996.jpg/330px-Ch%C3%A2teau_Marquis_de_Terme_1996.jpg"},"Château Pouget":{"i":"Château Pouget is a winery in the Margaux appellation of the Bordeaux region of France. The wine produced here was classified as one of ten Quatrièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Pouget","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Ch%C3%A2teau_Pouget_2007.jpg/330px-Ch%C3%A2teau_Pouget_2007.jpg"},"Château Prieuré-Lichine":{"i":"Château Prieuré-Lichine, previously Château Le Prieuré and Château Prieuré-Cantenac, is a winery in the Margaux appellation of the Bordeaux region of France, in the commune of Cantenac. The wine produced here was classified as one of ten Quatrièmes Crus in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Prieur%C3%A9-Lichine","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/5/50/Cork_of_Ch%C3%A2teau_Prieur%C3%A9-Lichine_1981.jpg/330px-Cork_of_Ch%C3%A2teau_Prieur%C3%A9-Lichine_1981.jpg"},"Château Saint-Pierre":{"i":"Château Saint-Pierre is a winery in the Saint-Julien appellation of the Bordeaux region of France. The wine produced here was classified as one of ten Quatrièmes Crus Classés in the historic Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Saint-Pierre","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/7/7f/Saint-Pierre%28Saint-Julien%29.jpg/330px-Saint-Pierre%28Saint-Julien%29.jpg"},"Château Talbot":{"i":"Château Talbot is a winery in the Saint-Julien appellation of the Bordeaux region of France. Château Talbot is also the name of the red wine produced by this property. It was classified as one of ten Quatrièmes Crus Classés in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Talbot","t":null},"Château Batailley":{"i":"Château Batailley is a winery in the Pauillac appellation of the Bordeaux region of France. The wine produced at the estate was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Batailley","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Ch%C3%A2teau_Batailley_47_detail.JPG/330px-Ch%C3%A2teau_Batailley_47_detail.JPG"},"Château Belgrave":{"i":"Château Belgrave is a winery in the Haut-Médoc appellation of the Bordeaux region of France. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855. At the time of classification, the winery was called Château Coutenceau.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Belgrave","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Ch%C3%A2teau_Belgrave_-_Cocks%26F%C3%A9ret_1883.jpg/330px-Ch%C3%A2teau_Belgrave_-_Cocks%26F%C3%A9ret_1883.jpg"},"Château Cantemerle":{"i":"Château Cantemerle is a winery in the Haut-Médoc appellation of the Bordeaux wine region of France, in the commune of Macau. The wine produced here was the final estate to be classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Cantemerle","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Chateau_Cantemerle_bottle.jpg/330px-Chateau_Cantemerle_bottle.jpg"},"Château Clerc-Milon":{"i":"Château Clerc Milon is a winery in the Pauillac appellation of the Bordeaux region of France. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Clerc_Milon","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Clerc_Milon_terrace_20120513.jpg/330px-Clerc_Milon_terrace_20120513.jpg"},"Château Cos Labory":{"i":"Château Cos Labory is a winery in the Saint-Estèphe appellation of the Bordeaux region of France. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Cos_Labory","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Cork_of_cos_labory_2000.jpg/330px-Cork_of_cos_labory_2000.jpg"},"Château Croizet Bages":{"i":"Château Croizet Bages is a winery in the Pauillac appellation of the Bordeaux region of France. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Croizet_Bages","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Cork_of_1971_Ch%C3%A2teau_Croizet-Bages.png/330px-Cork_of_1971_Ch%C3%A2teau_Croizet-Bages.png"},"Château Dauzac":{"i":"Château Dauzac is a winery in the Margaux appellation of the Bordeaux region of France, in the commune of Labarde. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855. It is now a family winery and owned by the Roulleau family.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Dauzac","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/DAUZAC_LOGO_IDENTITAIRE_FIN_JAUNE.jpg/330px-DAUZAC_LOGO_IDENTITAIRE_FIN_JAUNE.jpg"},"Château Grand-Puy-Ducasse":{"i":"Château Grand-Puy-Ducasse is a French winery in the Pauillac appellation of the Bordeaux region of France. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Grand-Puy-Ducasse","t":null},"Château Grand-Puy-Lacoste":{"i":"Château Grand-Puy-Lacoste is a winery in the Pauillac appellation of the Bordeaux region of France. Chateau Grand-Puy-Lacoste is also the name of the red wine produced by this property. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Grand-Puy-Lacoste","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Ch%C3%A2teau_Grand-Puy-Lacoste.jpg/330px-Ch%C3%A2teau_Grand-Puy-Lacoste.jpg"},"Château Haut-Bages-Libéral":{"i":"Château Haut-Bages-Libéral is a winery in the Pauillac appellation of the Bordeaux region of France. Château Haut-Bages-Libéral is also the name of the red wine produced by this property. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Haut-Bages-Lib%C3%A9ral","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/5/50/Cork_of_Ch%C3%A2teau_Haut-Bages-Lib%C3%A9ral.jpg/330px-Cork_of_Ch%C3%A2teau_Haut-Bages-Lib%C3%A9ral.jpg"},"Château Haut-Batailley":{"i":"Château Haut-Batailley is a winery in the Pauillac appellation of the Bordeaux region of France. The wine produced here was part of the property that was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Haut-Batailley","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Cork_of_Ch%C3%A2teau_Haut-Batailley_2002.jpg/330px-Cork_of_Ch%C3%A2teau_Haut-Batailley_2002.jpg"},"Château Lynch-Bages":{"i":"Château Lynch-Bages is a winery in the Pauillac appellation of the Bordeaux region of France. Château Lynch-Bages is also the name of the red wine produced by this property. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Lynch-Bages","t":null},"Château Lynch-Moussas":{"i":"Château Lynch-Moussas is a French winery in the Pauillac appellation of the Bordeaux region of France. Château Lynch-Moussas is also the name of the red wine produced by this property. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Lynch-Moussas","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/7/7f/2000_lynch-moussas.jpg/330px-2000_lynch-moussas.jpg"},"Château Pontet-Canet":{"i":"Château Pontet-Canet is a winery in the Pauillac appellation of the Bordeaux wine region of France. Chateau Pontet-Canet is also the name of the red wine produced by this property. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_Pontet-Canet","t":null},"Château Pédesclaux":{"i":"Château Pédesclaux is a winery in the Pauillac appellation of the Bordeaux region of France. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_P%C3%A9desclaux","t":"https://upload.wikimedia.org/wikipedia/en/4/49/Pedesclaux_label.bjb.png"},"Château d'Armailhac":{"i":"Château d'Armailhac, previously named Château Mouton-d'Armailhacq, Château Mouton-Baron Philippe, Mouton Baronne and Château Mouton-Baronne-Philippe (1979–1988), is a winery in the Pauillac appellation of the Bordeaux region of France.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_d'Armailhac","t":null},"Château de Camensac":{"i":"Château de Camensac is a winery in the Haut-Médoc appellation of the Bordeaux region of France. Château de Camensac is also the name of the red wine produced by this property. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_de_Camensac","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/8/88/Ch%C3%A2teau_de_Camensac_1983.jpg/330px-Ch%C3%A2teau_de_Camensac_1983.jpg"},"Château du Tertre":{"i":"Château du Tertre, or Le Tertre, is a winery in the Margaux appellation of the Bordeaux region of France, in the commune of Arsac. The wine produced here was classified as one of eighteen Cinquièmes Crus in the Bordeaux Wine Official Classification of 1855.","u":"https://en.wikipedia.org/wiki/Ch%C3%A2teau_du_Tertre","t":"https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/Cork_of_Chateau_du_Tertre.jpg/330px-Cork_of_Chateau_du_Tertre.jpg"}}</script>
+    <script id="chateaux-data" type="application/json">[{"name":"Château Haut-Brion","growth":"Premier Cru","growth_num":1,"aoc":"Pessac-Léognan","bank":"Left","commune":"Pessac","lat":44.814545,"lon":-0.612432,"elevation_m":26.0,"dist_gironde_km":24.04,"dist_atlantic_km":87.78,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Lafite Rothschild","growth":"Premier Cru","growth_num":1,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.224819,"lon":-0.773214,"elevation_m":14.0,"dist_gironde_km":5.04,"dist_atlantic_km":42.64,"soil_clay_pct":34.2,"soil_sand_pct":33.4,"soil_silt_pct":32.4},{"name":"Château Latour","growth":"Premier Cru","growth_num":1,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.175856,"lon":-0.744557,"elevation_m":13.0,"dist_gironde_km":4.96,"dist_atlantic_km":48.27,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Margaux","growth":"Premier Cru","growth_num":1,"aoc":"Margaux","bank":"Left","commune":"Margaux","lat":45.044436,"lon":-0.668808,"elevation_m":7.0,"dist_gironde_km":5.51,"dist_atlantic_km":63.55,"soil_clay_pct":31.8,"soil_sand_pct":38.9,"soil_silt_pct":29.3},{"name":"Château Mouton Rothschild","growth":"Premier Cru","growth_num":1,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.215278,"lon":-0.768457,"elevation_m":24.0,"dist_gironde_km":5.09,"dist_atlantic_km":43.69,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Brane-Cantenac","growth":"Deuxième Cru","growth_num":2,"aoc":"Margaux","bank":"Left","commune":"Cantenac","lat":45.023934,"lon":-0.673679,"elevation_m":15.0,"dist_gironde_km":7.53,"dist_atlantic_km":65.23,"soil_clay_pct":21.8,"soil_sand_pct":53.4,"soil_silt_pct":24.8},{"name":"Château Cos d'Estournel","growth":"Deuxième Cru","growth_num":2,"aoc":"Saint-Estèphe","bank":"Left","commune":"Saint-Estèphe","lat":45.230775,"lon":-0.775764,"elevation_m":21.0,"dist_gironde_km":4.99,"dist_atlantic_km":42.01,"soil_clay_pct":23.8,"soil_sand_pct":47.9,"soil_silt_pct":28.3},{"name":"Château Ducru-Beaucaillou","growth":"Deuxième Cru","growth_num":2,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.149083,"lon":-0.731023,"elevation_m":4.0,"dist_gironde_km":5.08,"dist_atlantic_km":51.26,"soil_clay_pct":36.1,"soil_sand_pct":30.3,"soil_silt_pct":33.6},{"name":"Château Durfort-Vivens","growth":"Deuxième Cru","growth_num":2,"aoc":"Margaux","bank":"Left","commune":"Margaux","lat":45.040046,"lon":-0.674505,"elevation_m":15.0,"dist_gironde_km":6.18,"dist_atlantic_km":63.7,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Gruaud-Larose","growth":"Deuxième Cru","growth_num":2,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.144531,"lon":-0.750964,"elevation_m":21.0,"dist_gironde_km":6.79,"dist_atlantic_km":50.73,"soil_clay_pct":30.6,"soil_sand_pct":41.9,"soil_silt_pct":27.5},{"name":"Château Lascombes","growth":"Deuxième Cru","growth_num":2,"aoc":"Margaux","bank":"Left","commune":"Margaux","lat":45.041412,"lon":-0.683781,"elevation_m":22.0,"dist_gironde_km":6.67,"dist_atlantic_km":63.17,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Léoville-Barton","growth":"Deuxième Cru","growth_num":2,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.1565,"lon":-0.745,"elevation_m":13.0,"dist_gironde_km":5.82,"dist_atlantic_km":49.94,"soil_clay_pct":29.0,"soil_sand_pct":41.6,"soil_silt_pct":29.4},{"name":"Château Léoville-Las Cases","growth":"Deuxième Cru","growth_num":2,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.1717,"lon":-0.7488,"elevation_m":8.0,"dist_gironde_km":5.46,"dist_atlantic_km":48.42,"soil_clay_pct":28.6,"soil_sand_pct":44.1,"soil_silt_pct":27.4},{"name":"Château Léoville-Poyferré","growth":"Deuxième Cru","growth_num":2,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.166,"lon":-0.748,"elevation_m":15.0,"dist_gironde_km":5.65,"dist_atlantic_km":48.96,"soil_clay_pct":27.2,"soil_sand_pct":43.5,"soil_silt_pct":29.3},{"name":"Château Montrose","growth":"Deuxième Cru","growth_num":2,"aoc":"Saint-Estèphe","bank":"Left","commune":"Saint-Estèphe","lat":45.246888,"lon":-0.762263,"elevation_m":17.0,"dist_gironde_km":3.27,"dist_atlantic_km":41.42,"soil_clay_pct":29.7,"soil_sand_pct":40.1,"soil_silt_pct":30.2},{"name":"Château Pichon Longueville Baron","growth":"Deuxième Cru","growth_num":2,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.1985,"lon":-0.7492,"elevation_m":14.0,"dist_gironde_km":4.34,"dist_atlantic_km":46.09,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Pichon Longueville Comtesse de Lalande","growth":"Deuxième Cru","growth_num":2,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.175785,"lon":-0.749545,"elevation_m":20.0,"dist_gironde_km":5.34,"dist_atlantic_km":48.03,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Rauzan-Gassies","growth":"Deuxième Cru","growth_num":2,"aoc":"Margaux","bank":"Left","commune":"Margaux","lat":45.036818,"lon":-0.675104,"elevation_m":15.0,"dist_gironde_km":6.47,"dist_atlantic_km":63.97,"soil_clay_pct":23.7,"soil_sand_pct":51.0,"soil_silt_pct":25.3},{"name":"Château Rauzan-Ségla","growth":"Deuxième Cru","growth_num":2,"aoc":"Margaux","bank":"Left","commune":"Margaux","lat":45.035948,"lon":-0.675506,"elevation_m":16.0,"dist_gironde_km":6.56,"dist_atlantic_km":64.03,"soil_clay_pct":23.7,"soil_sand_pct":51.0,"soil_silt_pct":25.3},{"name":"Château Boyd-Cantenac","growth":"Troisième Cru","growth_num":3,"aoc":"Margaux","bank":"Left","commune":"Cantenac","lat":45.022756,"lon":-0.655811,"elevation_m":7.0,"dist_gironde_km":6.66,"dist_atlantic_km":66.12,"soil_clay_pct":33.3,"soil_sand_pct":35.9,"soil_silt_pct":30.8},{"name":"Château Calon-Ségur","growth":"Troisième Cru","growth_num":3,"aoc":"Saint-Estèphe","bank":"Left","commune":"Saint-Estèphe","lat":45.26671,"lon":-0.778577,"elevation_m":3.0,"dist_gironde_km":3.68,"dist_atlantic_km":38.95,"soil_clay_pct":36.2,"soil_sand_pct":27.5,"soil_silt_pct":36.3},{"name":"Château Cantenac-Brown","growth":"Troisième Cru","growth_num":3,"aoc":"Margaux","bank":"Left","commune":"Cantenac","lat":45.027178,"lon":-0.67881,"elevation_m":18.0,"dist_gironde_km":7.48,"dist_atlantic_km":64.7,"soil_clay_pct":20.9,"soil_sand_pct":55.1,"soil_silt_pct":24.0},{"name":"Château Desmirail","growth":"Troisième Cru","growth_num":3,"aoc":"Margaux","bank":"Left","commune":"Margaux","lat":45.028202,"lon":-0.653791,"elevation_m":8.0,"dist_gironde_km":6.12,"dist_atlantic_km":65.71,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Ferrière","growth":"Troisième Cru","growth_num":3,"aoc":"Margaux","bank":"Left","commune":"Margaux","lat":45.043566,"lon":-0.676423,"elevation_m":12.0,"dist_gironde_km":6.01,"dist_atlantic_km":63.29,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Giscours","growth":"Troisième Cru","growth_num":3,"aoc":"Margaux","bank":"Left","commune":"Labarde","lat":45.008894,"lon":-0.646434,"elevation_m":9.0,"dist_gironde_km":7.14,"dist_atlantic_km":67.81,"soil_clay_pct":27.2,"soil_sand_pct":49.0,"soil_silt_pct":23.8},{"name":"Château Kirwan","growth":"Troisième Cru","growth_num":3,"aoc":"Margaux","bank":"Left","commune":"Cantenac","lat":45.027117,"lon":-0.658418,"elevation_m":12.0,"dist_gironde_km":6.49,"dist_atlantic_km":65.6,"soil_clay_pct":34.3,"soil_sand_pct":38.1,"soil_silt_pct":27.6},{"name":"Château La Lagune","growth":"Troisième Cru","growth_num":3,"aoc":"Haut-Médoc","bank":"Left","commune":"Ludon-Médoc","lat":44.978921,"lon":-0.617486,"elevation_m":12.0,"dist_gironde_km":7.64,"dist_atlantic_km":71.84,"soil_clay_pct":22.9,"soil_sand_pct":48.7,"soil_silt_pct":28.4},{"name":"Château Lagrange","growth":"Troisième Cru","growth_num":3,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.149425,"lon":-0.773258,"elevation_m":17.0,"dist_gironde_km":8.28,"dist_atlantic_km":49.28,"soil_clay_pct":24.3,"soil_sand_pct":49.4,"soil_silt_pct":26.3},{"name":"Château Langoa-Barton","growth":"Troisième Cru","growth_num":3,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.157334,"lon":-0.740015,"elevation_m":15.0,"dist_gironde_km":5.41,"dist_atlantic_km":50.11,"soil_clay_pct":29.4,"soil_sand_pct":43.8,"soil_silt_pct":26.8},{"name":"Château Malescot St. Exupéry","growth":"Troisième Cru","growth_num":3,"aoc":"Margaux","bank":"Left","commune":"Margaux","lat":45.040639,"lon":-0.675711,"elevation_m":15.0,"dist_gironde_km":6.2,"dist_atlantic_km":63.59,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Marquis d'Alesme Becker","growth":"Troisième Cru","growth_num":3,"aoc":"Margaux","bank":"Left","commune":"Margaux","lat":45.04,"lon":-0.6722,"elevation_m":16.0,"dist_gironde_km":6.06,"dist_atlantic_km":63.8,"soil_clay_pct":24.7,"soil_sand_pct":51.2,"soil_silt_pct":24.0},{"name":"Château Palmer","growth":"Troisième Cru","growth_num":3,"aoc":"Margaux","bank":"Left","commune":"Cantenac","lat":45.036693,"lon":-0.669282,"elevation_m":19.0,"dist_gironde_km":6.18,"dist_atlantic_km":64.24,"soil_clay_pct":23.8,"soil_sand_pct":52.8,"soil_silt_pct":23.4},{"name":"Château d'Issan","growth":"Troisième Cru","growth_num":3,"aoc":"Margaux","bank":"Left","commune":"Cantenac","lat":45.037849,"lon":-0.658199,"elevation_m":4.0,"dist_gironde_km":5.57,"dist_atlantic_km":64.63,"soil_clay_pct":36.3,"soil_sand_pct":33.7,"soil_silt_pct":30.0},{"name":"Château Beychevelle","growth":"Quatrième Cru","growth_num":4,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.144955,"lon":-0.734961,"elevation_m":13.0,"dist_gironde_km":5.55,"dist_atlantic_km":51.44,"soil_clay_pct":32.0,"soil_sand_pct":34.9,"soil_silt_pct":33.1},{"name":"Château Branaire-Ducru","growth":"Quatrième Cru","growth_num":4,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.144407,"lon":-0.739051,"elevation_m":16.0,"dist_gironde_km":5.89,"dist_atlantic_km":51.3,"soil_clay_pct":27.9,"soil_sand_pct":40.9,"soil_silt_pct":31.2},{"name":"Château Duhart-Milon","growth":"Quatrième Cru","growth_num":4,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.21584,"lon":-0.787531,"elevation_m":21.0,"dist_gironde_km":6.52,"dist_atlantic_km":42.69,"soil_clay_pct":22.9,"soil_sand_pct":45.4,"soil_silt_pct":31.7},{"name":"Château La Tour Carnet","growth":"Quatrième Cru","growth_num":4,"aoc":"Haut-Médoc","bank":"Left","commune":"Saint-Laurent-Médoc","lat":45.14701,"lon":-0.793833,"elevation_m":9.0,"dist_gironde_km":9.96,"dist_atlantic_km":48.6,"soil_clay_pct":26.5,"soil_sand_pct":41.1,"soil_silt_pct":32.4},{"name":"Château Lafon-Rochet","growth":"Quatrième Cru","growth_num":4,"aoc":"Saint-Estèphe","bank":"Left","commune":"Saint-Estèphe","lat":45.229405,"lon":-0.787792,"elevation_m":24.0,"dist_gironde_km":5.96,"dist_atlantic_km":41.51,"soil_clay_pct":24.3,"soil_sand_pct":46.6,"soil_silt_pct":29.1},{"name":"Château Marquis de Terme","growth":"Quatrième Cru","growth_num":4,"aoc":"Margaux","bank":"Left","commune":"Margaux","lat":45.038122,"lon":-0.677908,"elevation_m":18.0,"dist_gironde_km":6.52,"dist_atlantic_km":63.73,"soil_clay_pct":22.8,"soil_sand_pct":53.5,"soil_silt_pct":23.7},{"name":"Château Pouget","growth":"Quatrième Cru","growth_num":4,"aoc":"Margaux","bank":"Left","commune":"Cantenac","lat":45.023116,"lon":-0.656928,"elevation_m":7.0,"dist_gironde_km":6.71,"dist_atlantic_km":66.03,"soil_clay_pct":33.3,"soil_sand_pct":35.9,"soil_silt_pct":30.8},{"name":"Château Prieuré-Lichine","growth":"Quatrième Cru","growth_num":4,"aoc":"Margaux","bank":"Left","commune":"Cantenac","lat":45.028968,"lon":-0.656529,"elevation_m":11.0,"dist_gironde_km":6.23,"dist_atlantic_km":65.51,"soil_clay_pct":33.5,"soil_sand_pct":38.8,"soil_silt_pct":27.7},{"name":"Château Saint-Pierre","growth":"Quatrième Cru","growth_num":4,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.147189,"lon":-0.742709,"elevation_m":16.0,"dist_gironde_km":6.05,"dist_atlantic_km":50.88,"soil_clay_pct":27.1,"soil_sand_pct":41.9,"soil_silt_pct":31.0},{"name":"Château Talbot","growth":"Quatrième Cru","growth_num":4,"aoc":"Saint-Julien","bank":"Left","commune":"Saint-Julien-Beychevelle","lat":45.159701,"lon":-0.756945,"elevation_m":23.0,"dist_gironde_km":6.6,"dist_atlantic_km":49.09,"soil_clay_pct":23.4,"soil_sand_pct":52.1,"soil_silt_pct":24.5},{"name":"Château Batailley","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.176798,"lon":-0.772904,"elevation_m":30.0,"dist_gironde_km":7.08,"dist_atlantic_km":46.82,"soil_clay_pct":19.0,"soil_sand_pct":53.3,"soil_silt_pct":27.8},{"name":"Château Belgrave","growth":"Cinquième Cru","growth_num":5,"aoc":"Haut-Médoc","bank":"Left","commune":"Saint-Laurent-Médoc","lat":45.151191,"lon":-0.779672,"elevation_m":22.0,"dist_gironde_km":8.7,"dist_atlantic_km":48.83,"soil_clay_pct":21.3,"soil_sand_pct":50.6,"soil_silt_pct":28.1},{"name":"Château Cantemerle","growth":"Cinquième Cru","growth_num":5,"aoc":"Haut-Médoc","bank":"Left","commune":"Macau","lat":44.994238,"lon":-0.625929,"elevation_m":11.0,"dist_gironde_km":6.99,"dist_atlantic_km":70.06,"soil_clay_pct":26.8,"soil_sand_pct":50.8,"soil_silt_pct":22.4},{"name":"Château Clerc-Milon","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.221668,"lon":-0.765365,"elevation_m":16.0,"dist_gironde_km":4.58,"dist_atlantic_km":43.31,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Cos Labory","growth":"Cinquième Cru","growth_num":5,"aoc":"Saint-Estèphe","bank":"Left","commune":"Saint-Estèphe","lat":45.230943,"lon":-0.776837,"elevation_m":22.0,"dist_gironde_km":5.06,"dist_atlantic_km":41.94,"soil_clay_pct":23.8,"soil_sand_pct":47.9,"soil_silt_pct":28.3},{"name":"Château Croizet Bages","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.190774,"lon":-0.756591,"elevation_m":22.0,"dist_gironde_km":5.24,"dist_atlantic_km":46.38,"soil_clay_pct":24.3,"soil_sand_pct":45.2,"soil_silt_pct":30.5},{"name":"Château Dauzac","growth":"Cinquième Cru","growth_num":5,"aoc":"Margaux","bank":"Left","commune":"Labarde","lat":45.019373,"lon":-0.623337,"elevation_m":4.0,"dist_gironde_km":4.88,"dist_atlantic_km":67.89,"soil_clay_pct":32.0,"soil_sand_pct":35.6,"soil_silt_pct":32.4},{"name":"Château Grand-Puy-Ducasse","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.199949,"lon":-0.746636,"elevation_m":9.0,"dist_gironde_km":4.08,"dist_atlantic_km":46.1,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Grand-Puy-Lacoste","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.190037,"lon":-0.7691,"elevation_m":19.0,"dist_gironde_km":6.22,"dist_atlantic_km":45.83,"soil_clay_pct":22.1,"soil_sand_pct":49.2,"soil_silt_pct":28.7},{"name":"Château Haut-Bages-Libéral","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.182385,"lon":-0.749155,"elevation_m":7.0,"dist_gironde_km":5.03,"dist_atlantic_km":47.47,"soil_clay_pct":31.4,"soil_sand_pct":37.1,"soil_silt_pct":31.5},{"name":"Château Haut-Batailley","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.173338,"lon":-0.770878,"elevation_m":23.0,"dist_gironde_km":7.07,"dist_atlantic_km":47.22,"soil_clay_pct":18.6,"soil_sand_pct":53.8,"soil_silt_pct":27.6},{"name":"Château Lynch-Bages","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.191382,"lon":-0.754544,"elevation_m":22.0,"dist_gironde_km":5.05,"dist_atlantic_km":46.43,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Lynch-Moussas","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.183572,"lon":-0.792225,"elevation_m":29.0,"dist_gironde_km":8.26,"dist_atlantic_km":45.31,"soil_clay_pct":18.2,"soil_sand_pct":56.1,"soil_silt_pct":25.7},{"name":"Château Pontet-Canet","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.208716,"lon":-0.770813,"elevation_m":24.0,"dist_gironde_km":5.55,"dist_atlantic_km":44.13,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château Pédesclaux","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.21201,"lon":-0.756679,"elevation_m":12.0,"dist_gironde_km":4.33,"dist_atlantic_km":44.57,"soil_clay_pct":null,"soil_sand_pct":null,"soil_silt_pct":null},{"name":"Château d'Armailhac","growth":"Cinquième Cru","growth_num":5,"aoc":"Pauillac","bank":"Left","commune":"Pauillac","lat":45.211079,"lon":-0.769917,"elevation_m":23.0,"dist_gironde_km":5.38,"dist_atlantic_km":43.97,"soil_clay_pct":23.4,"soil_sand_pct":47.3,"soil_silt_pct":29.2},{"name":"Château de Camensac","growth":"Cinquième Cru","growth_num":5,"aoc":"Haut-Médoc","bank":"Left","commune":"Saint-Laurent-Médoc","lat":45.122,"lon":-0.7707,"elevation_m":9.0,"dist_gironde_km":9.27,"dist_atlantic_km":51.92,"soil_clay_pct":23.2,"soil_sand_pct":46.2,"soil_silt_pct":30.6},{"name":"Château du Tertre","growth":"Cinquième Cru","growth_num":5,"aoc":"Margaux","bank":"Left","commune":"Arsac","lat":45.005972,"lon":-0.680906,"elevation_m":24.0,"dist_gironde_km":9.52,"dist_atlantic_km":66.6,"soil_clay_pct":20.1,"soil_sand_pct":49.0,"soil_silt_pct":31.0}]</script>
+    <script>
+      // ============================================================
+      // Bordeaux 1855 — single-file interactive atlas
+      // ============================================================
+
+      const CHATEAUX = JSON.parse(document.getElementById("chateaux-data").textContent);
+      const DESCRIPTIONS = JSON.parse(document.getElementById("descriptions-data").textContent);
+
+      const CRU_META = {
+        1: { color: "#e6b450", label: "Premier Cru",    short: "1er Cru",  size: 18 },
+        2: { color: "#d97757", label: "Deuxième Cru",   short: "2e Cru",   size: 15 },
+        3: { color: "#b33951", label: "Troisième Cru",  short: "3e Cru",   size: 13 },
+        4: { color: "#7c2d3e", label: "Quatrième Cru",  short: "4e Cru",   size: 12 },
+        5: { color: "#5a2533", label: "Cinquième Cru",  short: "5e Cru",   size: 11 },
+      };
+
+      // ---------- State ----------
+      const state = {
+        cruFilter: new Set([1, 2, 3, 4, 5]),
+        aocFilter: new Set(),
+        search: "",
+        selected: null,
+      };
+
+      const aocs = Array.from(new Set(CHATEAUX.map((c) => c.aoc))).sort();
+      state.aocFilter = new Set(aocs);
+
+      // ---------- Map ----------
+      const tileDark = "tiles/dark/{z}/{x}/{y}.png";
+      const tileLight = "tiles/light/{z}/{x}/{y}.png";
+
+      const map = L.map("map", {
+        zoomControl: true,
+        attributionControl: true,
+        preferCanvas: false,
+      });
+
+      const bounds = L.latLngBounds(CHATEAUX.map((c) => [c.lat, c.lon])).pad(0.18);
+      map.fitBounds(bounds);
+
+      let tileLayer = L.tileLayer(tileDark, {
+        attribution:
+          '© <a href="https://www.openstreetmap.org/copyright">OSM</a> · © <a href="https://carto.com/attributions">CARTO</a>',
+        maxZoom: 12,
+      }).addTo(map);
+
+      // ---------- Markers ----------
+      const markers = new Map();
+
+      function makeMarkerIcon(c, selected) {
+        const meta = CRU_META[c.growth_num];
+        const sz = meta.size;
+        const html = `
+          <div class="chateau-dot" style="background:${meta.color};width:${sz}px;height:${sz}px;border:1.5px solid rgba(255,255,255,${
+          selected ? 0.9 : 0.4
+        });box-shadow:0 4px 14px ${meta.color}66;"></div>
+          <div class="chateau-tip">${c.name}</div>
+        `;
+        return L.divIcon({
+          className: "chateau-marker",
+          html,
+          iconSize: [sz, sz],
+          iconAnchor: [sz / 2, sz / 2],
+        });
+      }
+
+      function buildMarkers() {
+        CHATEAUX.forEach((c) => {
+          const m = L.marker([c.lat, c.lon], {
+            icon: makeMarkerIcon(c, false),
+            riseOnHover: true,
+            riseOffset: 400,
+          });
+          m.on("click", () => selectChateau(c.name));
+          markers.set(c.name, m);
+        });
+      }
+
+      function applyMarkerVisibility() {
+        const visible = filteredChateaux();
+        const visSet = new Set(visible.map((c) => c.name));
+        markers.forEach((m, name) => {
+          const onMap = map.hasLayer(m);
+          if (visSet.has(name) && !onMap) m.addTo(map);
+          else if (!visSet.has(name) && onMap) map.removeLayer(m);
+          // refresh icon for selected state
+          const c = CHATEAUX.find((x) => x.name === name);
+          const isSel = state.selected === name;
+          m.setIcon(makeMarkerIcon(c, isSel));
+          const el = m.getElement();
+          if (el) el.setAttribute("data-selected", isSel ? "true" : "false");
+        });
+      }
+
+      // ---------- Filtering ----------
+      function filteredChateaux() {
+        const q = state.search.trim().toLowerCase();
+        return CHATEAUX.filter((c) => {
+          if (!state.cruFilter.has(c.growth_num)) return false;
+          if (!state.aocFilter.has(c.aoc)) return false;
+          if (q) {
+            const hay = `${c.name} ${c.commune} ${c.aoc}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
+          return true;
+        });
+      }
+
+      // ---------- UI rendering ----------
+      const $cruChips = document.getElementById("cruChips");
+      const $aocChips = document.getElementById("aocChips");
+      const $list = document.getElementById("chateauList");
+      const $statCount = document.getElementById("statCount");
+      const $statAoc = document.getElementById("statAoc");
+      const $statElev = document.getElementById("statElev");
+      const $legendRows = document.getElementById("legendRows");
+      const $detail = document.getElementById("detailPanel");
+      const $search = document.getElementById("searchInput");
+      const $themeBtn = document.getElementById("themeBtn");
+
+      function renderCruChips() {
+        $cruChips.innerHTML = "";
+        Object.entries(CRU_META).forEach(([num, meta]) => {
+          const n = Number(num);
+          const count = CHATEAUX.filter((c) => c.growth_num === n).length;
+          const el = document.createElement("button");
+          el.className = "chip";
+          el.dataset.active = state.cruFilter.has(n) ? "true" : "false";
+          el.innerHTML = `
+            <span class="dot" style="background:${meta.color}"></span>
+            <span>${meta.short}</span>
+            <span class="chip-count">${count}</span>
+          `;
+          el.onclick = () => {
+            if (state.cruFilter.has(n)) state.cruFilter.delete(n);
+            else state.cruFilter.add(n);
+            if (state.cruFilter.size === 0) state.cruFilter = new Set([1, 2, 3, 4, 5]);
+            rerender();
+          };
+          $cruChips.appendChild(el);
+        });
+      }
+
+      function renderAocChips() {
+        $aocChips.innerHTML = "";
+        aocs.forEach((aoc) => {
+          const count = CHATEAUX.filter((c) => c.aoc === aoc).length;
+          const el = document.createElement("button");
+          el.className = "chip";
+          el.dataset.active = state.aocFilter.has(aoc) ? "true" : "false";
+          el.innerHTML = `
+            <span>${aoc}</span>
+            <span class="chip-count">${count}</span>
+          `;
+          el.onclick = () => {
+            if (state.aocFilter.has(aoc)) state.aocFilter.delete(aoc);
+            else state.aocFilter.add(aoc);
+            if (state.aocFilter.size === 0) state.aocFilter = new Set(aocs);
+            rerender();
+          };
+          $aocChips.appendChild(el);
+        });
+      }
+
+      function renderList() {
+        const filtered = filteredChateaux();
+        if (filtered.length === 0) {
+          $list.innerHTML = `<div class="list-empty">No château matches the current filters.</div>`;
+          return;
+        }
+        $list.innerHTML = "";
+        filtered.forEach((c) => {
+          const meta = CRU_META[c.growth_num];
+          const el = document.createElement("div");
+          el.className = "list-item";
+          el.dataset.selected = state.selected === c.name ? "true" : "false";
+          el.innerHTML = `
+            <span class="list-marker" style="background:${meta.color}"></span>
+            <div>
+              <div class="list-name">${c.name}</div>
+              <div class="list-meta">${c.aoc} · ${c.commune}</div>
+            </div>
+            <span class="list-cru">${meta.short}</span>
+          `;
+          el.onclick = () => selectChateau(c.name, { fly: true });
+          $list.appendChild(el);
+        });
+      }
+
+      function renderStats() {
+        const filtered = filteredChateaux();
+        $statCount.textContent = filtered.length;
+        const aocCount = new Set(filtered.map((c) => c.aoc)).size;
+        $statAoc.textContent = aocCount;
+        const elev = filtered.filter((c) => c.elevation_m != null).map((c) => c.elevation_m);
+        $statElev.textContent = elev.length
+          ? (elev.reduce((s, x) => s + x, 0) / elev.length).toFixed(1)
+          : "—";
+      }
+
+      function renderLegend() {
+        $legendRows.innerHTML = "";
+        Object.entries(CRU_META).forEach(([num, meta]) => {
+          const n = Number(num);
+          const count = CHATEAUX.filter((c) => c.growth_num === n).length;
+          const row = document.createElement("div");
+          row.className = "legend-row";
+          row.dataset.active = state.cruFilter.has(n) ? "true" : "false";
+          row.innerHTML = `
+            <span class="legend-swatch" style="background:${meta.color}"></span>
+            <span>${meta.label}</span>
+            <span class="legend-count">${count}</span>
+          `;
+          row.onclick = () => {
+            if (state.cruFilter.has(n)) state.cruFilter.delete(n);
+            else state.cruFilter.add(n);
+            if (state.cruFilter.size === 0) state.cruFilter = new Set([1, 2, 3, 4, 5]);
+            rerender();
+          };
+          $legendRows.appendChild(row);
+        });
+      }
+
+      function renderDetail() {
+        if (!state.selected) {
+          $detail.innerHTML = `
+            <div class="detail-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 21s-7-5.5-7-11a7 7 0 1 1 14 0c0 5.5-7 11-7 11Z" />
+                <circle cx="12" cy="10" r="2.5" />
+              </svg>
+              <div>
+                <div class="detail-empty-title">Select A Château</div>
+                <div class="detail-empty-copy">点地图上的任意一个酒庄，查看 AOC、海拔、距吉伦特河 / 大西洋距离与土壤构成。</div>
+              </div>
+            </div>`;
+          return;
+        }
+        const c = CHATEAUX.find((x) => x.name === state.selected);
+        const meta = CRU_META[c.growth_num];
+        const fmt = (v, unit, dp = 1) =>
+          v == null ? `<span style="color:var(--soft)">—</span>` : `${v.toFixed(dp)}<span class="kv-unit">${unit}</span>`;
+
+        const hasSoil = c.soil_clay_pct != null;
+        const soilBar = hasSoil
+          ? `<div class="soil-bar">
+              <div class="soil-seg soil-clay" style="width:${c.soil_clay_pct}%"></div>
+              <div class="soil-seg soil-sand" style="width:${c.soil_sand_pct}%"></div>
+              <div class="soil-seg soil-silt" style="width:${c.soil_silt_pct}%"></div>
+            </div>
+            <div class="soil-legend">
+              <span>Clay <b>${c.soil_clay_pct.toFixed(1)}%</b></span>
+              <span>Sand <b>${c.soil_sand_pct.toFixed(1)}%</b></span>
+              <span>Silt <b>${c.soil_silt_pct.toFixed(1)}%</b></span>
+            </div>`
+          : `<div class="soil-na">Soil composition unavailable for this estate.</div>`;
+
+        const gmaps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+          c.name + " " + c.commune + " Bordeaux"
+        )}`;
+        const d = DESCRIPTIONS[c.name];
+        const wiki = (d && d.u) || `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(c.name)}`;
+        const aboutBlock = d && d.i
+          ? `<div>
+              <div class="detail-block-title">About</div>
+              <div class="detail-about">
+                <p>${d.i}</p>
+                <a class="detail-about-source" href="${wiki}" target="_blank" rel="noopener">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 17 17 7" />
+                    <path d="M8 7h9v9" />
+                  </svg>
+                  Read on Wikipedia
+                </a>
+              </div>
+            </div>`
+          : "";
+
+        $detail.innerHTML = `
+          <div class="detail-head">
+            <span class="detail-cru-pill"><span class="dot" style="background:${meta.color}"></span>${meta.label}</span>
+            <h2 class="detail-name">${c.name}</h2>
+            <div class="detail-sub">${c.aoc} · ${c.commune} · ${c.bank} Bank</div>
+          </div>
+          <div class="detail-body">
+            ${aboutBlock}
+            <div>
+              <div class="detail-block-title">Geography</div>
+              <div class="kv-grid">
+                <div class="kv-cell">
+                  <div class="kv-label">Elevation</div>
+                  <div class="kv-value">${fmt(c.elevation_m, "m", 0)}</div>
+                </div>
+                <div class="kv-cell">
+                  <div class="kv-label">Lat / Lon</div>
+                  <div class="kv-value" style="font-size:13px">${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}</div>
+                </div>
+                <div class="kv-cell">
+                  <div class="kv-label">To Gironde</div>
+                  <div class="kv-value">${fmt(c.dist_gironde_km, "km", 1)}</div>
+                </div>
+                <div class="kv-cell">
+                  <div class="kv-label">To Atlantic</div>
+                  <div class="kv-value">${fmt(c.dist_atlantic_km, "km", 1)}</div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="detail-block-title">Soil Profile</div>
+              ${soilBar}
+            </div>
+
+            <div>
+              <div class="detail-block-title">External</div>
+              <div class="links-row">
+                <a class="link-pill" href="${gmaps}" target="_blank" rel="noopener">
+                  <svg viewBox="0 0 24 24"><path d="M12 21s-7-5.5-7-11a7 7 0 1 1 14 0c0 5.5-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+                  Google Maps
+                </a>
+                <a class="link-pill" href="${wiki}" target="_blank" rel="noopener">
+                  <svg viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14"/><path d="M4 19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
+                  Wikipedia
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // ---------- Selection ----------
+      function selectChateau(name, opts = {}) {
+        state.selected = name;
+        const c = CHATEAUX.find((x) => x.name === name);
+        if (opts.fly && c) {
+          map.flyTo([c.lat, c.lon], Math.max(map.getZoom(), 13), { duration: 0.6 });
+        }
+        renderList();
+        renderDetail();
+        applyMarkerVisibility();
+      }
+
+      // ---------- Theme ----------
+      function setTheme(t) {
+        document.documentElement.setAttribute("data-theme", t);
+        localStorage.setItem("bordeaux.theme", t);
+        if (tileLayer) map.removeLayer(tileLayer);
+        tileLayer = L.tileLayer(t === "dark" ? tileDark : tileLight, {
+          attribution:
+            '© <a href="https://www.openstreetmap.org/copyright">OSM</a> · © <a href="https://carto.com/attributions">CARTO</a>',
+          maxZoom: 12,
+        }).addTo(map);
+      }
+      $themeBtn.onclick = () => {
+        const cur = document.documentElement.getAttribute("data-theme");
+        setTheme(cur === "dark" ? "light" : "dark");
+      };
+      const saved = localStorage.getItem("bordeaux.theme");
+      if (saved === "light") setTheme("light");
+
+      // ---------- Search ----------
+      let searchTimer;
+      $search.oninput = (e) => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          state.search = e.target.value;
+          rerender();
+        }, 80);
+      };
+
+      // ---------- Boot ----------
+      function rerender() {
+        renderCruChips();
+        renderAocChips();
+        renderList();
+        renderStats();
+        renderLegend();
+        applyMarkerVisibility();
+      }
+
+      buildMarkers();
+      rerender();
+      renderDetail();
+    </script>
+  </body>
+</html>
