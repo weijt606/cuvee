@@ -1,5 +1,64 @@
 # Contributing to Cuvée
 
+## Origin
+
+Cuvée is the post-hackathon continuation of **Wine Signals**, built in a
+single seven-hour sprint at the **Paris AI Hackathon 2026** (hosted by
+{Tech: Europe} + Hexa). The original hackathon repository is preserved
+in its as-shipped state at
+<https://github.com/weijt606/paris-ai-hackathon-2026>.
+
+Cuvée inherits the architecture verbatim — the multi-agent pipeline,
+the 1,150-line vintage-quality schema, the 61-château 1855 dataset,
+the backtest verification loop, the Atlas UI shell — and then strips
+the hackathon-specific framing, replaces the sponsor-bound stack with
+pluggable provider interfaces, and adds a memory layer for
+self-optimization (Phase B in [`README.md`](README.md#roadmap)).
+
+## Acknowledgements
+
+This project would not exist without the work shipped during the
+hackathon sprint. With gratitude to:
+
+### Hackathon teammates
+
+- **Jiachen Wang** — `weather_agent`: ERA5 1990-2024 reanalysis +
+  ECMWF SEAS5 2026 seasonal forecast, DEM-based downscaling to 61
+  château centroids (lapse rate + TPI + Gironde buffer), NASA POWER
+  2025 backfill, schema-aligned monthly climate aggregates.
+- **Chenxin Lei** — `tavily_agent`: 5-channel Bordeaux harness across
+  sentiment / policy / regulation / winemaker / market sources, trusted-
+  domain weighting, dedup, the SQLite 7-day cache, and the chateau-scoped
+  cache-export tooling that lets the demo machine ship pre-hydrated.
+
+### Hackathon sponsors
+
+- **OpenAI** — the orchestrator's tool-use loop and the strict-JSON
+  extraction tier were built against OpenAI Chat Completions. The
+  reference implementation still runs OpenAI by default; the Phase B
+  provider abstraction was designed so the OpenAI integration is
+  one provider among five.
+- **Tavily** — the original public-web grounding layer. Tavily
+  remains one of four supported retrieval providers and is still
+  the default when its key is configured.
+- **Pioneer.ai** — provided the small-LLM hosting tier for narrative
+  generation during the hackathon. Pioneer is no longer integrated as
+  of Phase B; the role it played (specialising the system over time
+  via fine-tuning) is now served by the non-parametric memory layer
+  (`src/lib/memory/`). Thank you for the platform that taught us why
+  this loop matters.
+
+### Event hosts
+
+Thanks to **{Tech: Europe}** and **Hexa** for organising the Paris AI
+Hackathon 2026 and for the day-of judging that helped sharpen the
+demo into something worth continuing.
+
+If you contributed to the original hackathon project and your name
+should appear here, please open a PR adjusting this section.
+
+---
+
 ## Setup
 
 See [`README.md`](README.md) "Quick start" for prerequisites + the four-step setup. Once you have a working dev server, you're ready to contribute.
