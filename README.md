@@ -237,13 +237,7 @@ If a non-wine vertical reaches out (agriculture, climate-real-estate, insurance)
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the agent contract, PR checklist, and conventions. Branch names must be ASCII / English. No `Co-Authored-By:` AI trailers in commits.
-
-## Acknowledgements
-
-Cuvée is the post-hackathon continuation of **Wine Signals**, built at the **Paris AI Hackathon 2026** (hosted by {Tech: Europe} + Hexa). The hackathon-shipped architecture — multi-agent pipeline, 1,150-line vintage-quality schema, 61-château 1855 dataset, backtest verification loop, Atlas UI — is preserved as it stood at the end of the sprint at <https://github.com/weijt606/paris-ai-hackathon-2026>. See that repository for the full contributor list and per-agent ownership; see [`CONTRIBUTING.md`](CONTRIBUTING.md#acknowledgements) for the credits in full.
-
-With thanks to **OpenAI**, **Tavily**, and **Pioneer.ai** as the hackathon sponsors whose APIs the original was built against.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the agent contract, PR checklist, conventions, and acknowledgements (origin, hackathon credits, sponsor thanks). Branch names must be ASCII / English. No `Co-Authored-By:` AI trailers in commits.
 
 ## License
 
