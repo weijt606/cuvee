@@ -1,8 +1,9 @@
 import "server-only";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { isDemoMode } from "@/lib/env";
+import { env, isDemoMode } from "@/lib/env";
 import { defaultLLM, hasLLM } from "@/lib/llm";
+import { memory, formatFewShotExamples } from "@/lib/memory";
 import type { SubAgent } from "@/lib/agents/types";
 import type { Persona, Recommendation, RiskDriver } from "@/lib/wine/types";
 
@@ -253,6 +254,25 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
           ? tradePersonaLens(ctx.tradePersona)
           : "";
 
+      // Memory-based self-optimization: pull the most similar past
+      // predictions (preferring backtest-verified ones) and inject them
+      // as calibration anchors. This is what replaced Pioneer's fine-
+      // tuning role — the LLM stays consistent across runs because it
+      // sees its own prior verdicts, and gradually drifts toward critic
+      // consensus when backtests are available.
+      const vintageYear = Number.parseInt(
+        (input.weatherSignal?.match(/\bVintage (\d{4})\b/)?.[1] ?? "") || `${new Date().getFullYear()}`,
+        10,
+      );
+      const fewShot = await memory().findSimilar({
+        regionId: input.regionId,
+        persona: input.persona,
+        chateau: ctx.chateau,
+        year: vintageYear,
+        limit: env.CUVEE_MEMORY_FEW_SHOT_LIMIT,
+      });
+      const fewShotBlock = formatFewShotExamples(fewShot);
+
       const userMessage = [
         `Region id: ${input.regionId}`,
         `Persona: ${input.persona}`,
@@ -261,6 +281,7 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
         input.geoSignal && `Geographical / terroir signals:\n${input.geoSignal}`,
         input.tavilySignal && `Public-web signals:\n${input.tavilySignal}`,
         uploadBlock,
+        fewShotBlock,
       ]
         .filter(Boolean)
         .join("\n\n");

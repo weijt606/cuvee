@@ -1,6 +1,7 @@
 import "server-only";
 import { isDemoFast, isDemoMode } from "@/lib/env";
 import { defaultLLM, hasLLM, type ChatMessage, type ChatTool } from "@/lib/llm";
+import { memory, hashAnalyzeInput } from "@/lib/memory";
 import { demoWineAnalysis } from "@/lib/demo/fixtures";
 import {
   type AgentContext,
@@ -182,7 +183,10 @@ export async function analyze(
   // question. That trade-off is acceptable for the live demo only.
   if (isDemoFast) {
     const result = await directDispatch(input, ctx, trace);
-    if (!result.isDemoOrPartial) cachePut(key, result);
+    if (!result.isDemoOrPartial) {
+      cachePut(key, result);
+      void persistToMemory(input, result);
+    }
     return result;
   }
 
@@ -268,8 +272,70 @@ export async function analyze(
   const result = harvest(input, trace);
   // Only cache non-partial results — partials (failed sub-agents, missing
   // keys) shouldn't poison the cache for future requests.
-  if (!result.isDemoOrPartial) cachePut(key, result);
+  if (!result.isDemoOrPartial) {
+    cachePut(key, result);
+    void persistToMemory(input, result);
+  }
   return result;
+}
+
+/**
+ * Write the analysis (and its backtest result, when present) to the memory
+ * store. Fire-and-forget: caller uses `void persistToMemory(...)` so the
+ * SQLite write never blocks the response. Best-effort — memory failures
+ * never crash the orchestrator.
+ */
+async function persistToMemory(input: AnalyzeInput, result: AnalyzeResult): Promise<void> {
+  try {
+    const year = Number.parseInt(input.timeframe.end.slice(0, 4), 10);
+    if (!Number.isFinite(year)) return;
+
+    const driverSummary =
+      result.drivers
+        .slice(0, 3)
+        .map((d) => `${d.source}:${d.signal.slice(0, 60)}`)
+        .join(" · ") || "(no drivers)";
+    const rationaleSummary = result.rationale?.slice(0, 300);
+
+    // Compute the actual critic average from backtest data, if any.
+    let actualAvgCriticScore: number | undefined;
+    let actualCriticCount: number | undefined;
+    if (result.backtest && result.backtest.critics.length > 0) {
+      const scored = result.backtest.critics.filter(
+        (c): c is typeof c & { score: number } => typeof c.score === "number",
+      );
+      if (scored.length > 0) {
+        actualAvgCriticScore =
+          scored.reduce((sum, c) => sum + c.score, 0) / scored.length;
+        actualCriticCount = scored.length;
+      }
+    }
+
+    await memory().insert({
+      regionId: input.region.id,
+      chateau: input.chateau,
+      year,
+      persona: input.persona,
+      tradePersona: input.tradePersona,
+      predictedRiskScore: result.riskScore,
+      predictedQualityBand: result.qualityBand ?? "Unknown",
+      driverSummary,
+      rationaleSummary,
+      actualAvgCriticScore,
+      actualCriticCount,
+      backtestVerdict: result.backtest?.verdict,
+      inputHash: hashAnalyzeInput({
+        region: input.region,
+        timeframe: input.timeframe,
+        persona: input.persona,
+        question: input.question,
+        chateau: input.chateau,
+        tradePersona: input.tradePersona,
+      }),
+    });
+  } catch {
+    /* memory persistence is best-effort */
+  }
 }
 
 /**

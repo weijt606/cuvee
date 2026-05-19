@@ -52,6 +52,18 @@ const serverSchema = z.object({
   SEARXNG_BASE_URL: z.string().url().optional(),
   /** Optional bearer token if your SearXNG instance is protected. */
   SEARXNG_API_KEY: z.string().min(1).optional(),
+
+  // ─── memory layer (Phase B3) ─────────────────────────────────────────
+  /** Set truthy to disable the SQLite memory layer entirely (no episodic
+   *  recall, no few-shot injection, no calibration drift tracking). */
+  CUVEE_MEMORY_DISABLED: z
+    .union([z.literal("true"), z.literal("false"), z.literal("")])
+    .optional()
+    .transform((v) => v === "true"),
+  /** Soft cap on row count. Oldest rows are evicted FIFO when exceeded. */
+  CUVEE_MEMORY_MAX_ROWS: z.coerce.number().int().positive().default(1000),
+  /** Number of past examples to inject as few-shot calibration anchors. */
+  CUVEE_MEMORY_FEW_SHOT_LIMIT: z.coerce.number().int().min(0).max(8).default(3),
 });
 
 const publicSchema = z.object({

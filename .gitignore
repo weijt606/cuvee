@@ -24,6 +24,7 @@ next-env.d.ts
 dist/
 build/
 .cache/
+data/.memory/
 .turbo/
 .parcel-cache/
 coverage/
