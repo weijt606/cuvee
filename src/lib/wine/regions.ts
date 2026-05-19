@@ -4,7 +4,7 @@ import type { Region } from "@/lib/wine/types";
  * Static seed list of Burgundy + Bordeaux regions. Hand-picked, not exhaustive.
  *
  * Dev team: extend or swap for INAO data when geo-agent lands. Keep id slugs
- * stable — they're used as foreign keys in agent traces and pioneer.ai logs.
+ * stable — they're used as foreign keys in agent traces and persisted memory.
  */
 export const REGIONS: Region[] = [
   {

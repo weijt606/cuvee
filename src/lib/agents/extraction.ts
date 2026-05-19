@@ -1,8 +1,8 @@
 import "server-only";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { isDemoMode, openaiModelForAgents, sponsors } from "@/lib/env";
-import { openaiClient } from "@/lib/ai/openai";
+import { isDemoMode } from "@/lib/env";
+import { defaultLLM, hasLLM } from "@/lib/llm";
 import type { SubAgent } from "@/lib/agents/types";
 import type { Persona, Recommendation, RiskDriver } from "@/lib/wine/types";
 
@@ -213,15 +213,15 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
   async run(input, ctx) {
     const t0 = Date.now();
 
-    // Demo mode or no OpenAI key → heuristic fallback.
-    if (isDemoMode || !sponsors.openai) {
+    // Demo mode or no LLM provider configured → heuristic fallback.
+    if (isDemoMode || !hasLLM()) {
       const data = heuristicFallback(input);
       return {
         agent: "extraction_agent",
         ok: true,
         durationMs: Date.now() - t0,
         data,
-        summary: isDemoMode ? "demo · heuristic" : "no openai · heuristic",
+        summary: isDemoMode ? "demo · heuristic" : "no llm · heuristic",
       };
     }
 
@@ -248,7 +248,6 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
       : "";
 
     try {
-      const client = openaiClient();
       const tradeLens =
         input.persona === "trade" && ctx.tradePersona
           ? tradePersonaLens(ctx.tradePersona)
@@ -266,25 +265,20 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
         .filter(Boolean)
         .join("\n\n");
 
-      const res = await client.chat.completions.create(
-        {
-          model: openaiModelForAgents(),
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT_HEAD + schemaText },
-            { role: "user", content: userMessage },
-          ],
-          response_format: {
-            type: "json_schema",
-            json_schema: RESPONSE_JSON_SCHEMA,
-          },
-          // Note: newer OpenAI reasoning models (gpt-5*, o-series) only
-          // accept the default temperature. We omit the param so any
-          // current GA model works.
+      const res = await defaultLLM().chat({
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT_HEAD + schemaText },
+          { role: "user", content: userMessage },
+        ],
+        responseSchema: {
+          name: RESPONSE_JSON_SCHEMA.name,
+          schema: RESPONSE_JSON_SCHEMA.schema as Record<string, unknown>,
+          strict: RESPONSE_JSON_SCHEMA.strict,
         },
-        { signal: ctx.signal },
-      );
+        signal: ctx.signal,
+      });
 
-      const content = res.choices[0]?.message?.content;
+      const content = res.content;
       if (!content) {
         const data = heuristicFallback(input);
         return {

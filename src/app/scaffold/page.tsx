@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { sponsors, isDemoMode } from "@/lib/env";
+import { integrations, isDemoMode } from "@/lib/env";
 
-const PROVIDER_INFO: { key: keyof typeof sponsors; name: string; role: string }[] = [
-  { key: "openai", name: "OpenAI", role: "Orchestrator brain (Chat Completions tool-use)" },
-  { key: "tavily", name: "Tavily", role: "Public-web grounding for tavily_agent" },
-  { key: "pioneer", name: "Pioneer.ai", role: "feature_agent tier-1 LLM (Qwen / GLM / Llama-class)" },
+const PROVIDER_INFO: { key: keyof typeof integrations; name: string; role: string }[] = [
+  { key: "openai", name: "OpenAI", role: "Default LLM provider — extraction · feature · backtest · orchestrator routing" },
+  { key: "anthropic", name: "Anthropic Claude", role: "Alt LLM — set CUVEE_LLM_PROVIDER=anthropic to use" },
+  { key: "qwen", name: "Qwen (DashScope)", role: "Alt LLM — set CUVEE_LLM_PROVIDER=qwen to use" },
+  { key: "deepseek", name: "DeepSeek", role: "Alt LLM — set CUVEE_LLM_PROVIDER=deepseek to use" },
+  { key: "ollama", name: "Ollama (local)", role: "Alt LLM — set CUVEE_LLM_PROVIDER=ollama (free, runs locally)" },
+  { key: "tavily", name: "Tavily", role: "Public-web grounding for tavily_agent + backtest critic retrieval" },
 ];
 
 export default function ScaffoldPage() {
@@ -12,7 +15,7 @@ export default function ScaffoldPage() {
     <main className="container mx-auto max-w-4xl px-6 py-16">
       <header className="mb-12">
         <p className="kicker">Config status</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">Sponsors & integrations</h1>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">Providers & integrations</h1>
         <p className="mt-3 text-soft">
           Env-gated. Drop a key into <code>.env.local</code> to enable.
         </p>
@@ -25,10 +28,10 @@ export default function ScaffoldPage() {
       </header>
 
       <section className="mb-10">
-        <h2 className="section-kicker mb-4">Sponsors</h2>
+        <h2 className="section-kicker mb-4">Providers</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {PROVIDER_INFO.map((s) => (
-            <Card key={s.key} name={s.name} role={s.role} on={sponsors[s.key]} />
+            <Card key={s.key} name={s.name} role={s.role} on={integrations[s.key]} />
           ))}
         </div>
       </section>

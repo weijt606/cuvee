@@ -1,7 +1,6 @@
 import "server-only";
-import type OpenAI from "openai";
-import { isDemoFast, isDemoMode, openaiModelForAgents, sponsors } from "@/lib/env";
-import { openaiClient } from "@/lib/ai/openai";
+import { isDemoFast, isDemoMode } from "@/lib/env";
+import { defaultLLM, hasLLM, type ChatMessage, type ChatTool } from "@/lib/llm";
 import { demoWineAnalysis } from "@/lib/demo/fixtures";
 import {
   type AgentContext,
@@ -56,14 +55,11 @@ register(extractionAgent);
 register(featureAgent);
 register(backtestAgent);
 
-function toolDescriptors(): OpenAI.Chat.Completions.ChatCompletionTool[] {
+function toolDescriptors(): ChatTool[] {
   return Array.from(REGISTRY.values()).map((a) => ({
-    type: "function",
-    function: {
-      name: a.name,
-      description: a.description,
-      parameters: a.input_schema as Record<string, unknown>,
-    },
+    name: a.name,
+    description: a.description,
+    parameters: a.input_schema as Record<string, unknown>,
   }));
 }
 
@@ -147,7 +143,7 @@ export async function analyze(
   opts: { signal?: AbortSignal } = {},
 ): Promise<AnalyzeResult> {
   if (isDemoMode) return demoWineAnalysis(input);
-  if (!sponsors.openai) {
+  if (!hasLLM()) {
     const fixture = demoWineAnalysis(input);
     return { ...fixture, isDemoOrPartial: true };
   }
@@ -190,7 +186,7 @@ export async function analyze(
     return result;
   }
 
-  const client = openaiClient();
+  const llm = defaultLLM();
 
   const bootstrap = [
     `Region: ${input.region.name} (id=${input.region.id}, parent=${input.region.parent})`,
@@ -210,69 +206,61 @@ export async function analyze(
     .filter(Boolean)
     .join("\n");
 
-  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+  const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: bootstrap },
   ];
 
+  const tools = toolDescriptors();
   for (let step = 0; step < MAX_STEPS; step++) {
     if (opts.signal?.aborted) throw new Error("Aborted");
 
-    const res = await client.chat.completions.create(
-      {
-        model: openaiModelForAgents(),
-        messages,
-        tools: toolDescriptors(),
-        tool_choice: "auto",
-      },
-      { signal: opts.signal },
-    );
+    const res = await llm.chat({
+      messages,
+      tools,
+      toolChoice: "auto",
+      signal: opts.signal,
+    });
 
-    const msg = res.choices[0]?.message;
-    if (!msg) throw new Error("Orchestrator: empty completion");
-
-    const toolCalls = msg.tool_calls ?? [];
+    const toolCalls = res.toolCalls ?? [];
     if (toolCalls.length === 0) break;
 
-    messages.push(msg);
+    // Append the assistant turn (carrying its tool_calls) back into history.
+    messages.push({
+      role: "assistant",
+      content: res.content,
+      tool_calls: toolCalls,
+    });
 
-    const toolMessages: OpenAI.Chat.Completions.ChatCompletionToolMessageParam[] =
-      await Promise.all(
-        toolCalls.map(async (tc) => {
-          if (tc.type !== "function") {
-            return {
-              role: "tool",
-              tool_call_id: tc.id,
-              content: `Unsupported tool call type: ${tc.type}`,
-            };
-          }
-          const agent = REGISTRY.get(tc.function.name);
-          if (!agent) {
-            return {
-              role: "tool",
-              tool_call_id: tc.id,
-              content: `Unknown tool: ${tc.function.name}`,
-            };
-          }
-          let parsed: unknown;
-          try {
-            parsed = JSON.parse(tc.function.arguments || "{}");
-          } catch (e) {
-            return {
-              role: "tool",
-              tool_call_id: tc.id,
-              content: `Invalid JSON arguments: ${e instanceof Error ? e.message : String(e)}`,
-            };
-          }
-          const result = await runAgentSafely(agent, parsed, ctx);
-          trace.push(result);
+    const toolMessages: ChatMessage[] = await Promise.all(
+      toolCalls.map(async (tc): Promise<ChatMessage> => {
+        const agent = REGISTRY.get(tc.name);
+        if (!agent) {
           return {
             role: "tool",
             tool_call_id: tc.id,
-            content: JSON.stringify(result.data ?? { error: result.error }),
+            content: `Unknown tool: ${tc.name}`,
           };
-        }),
-      );
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(tc.argumentsJson || "{}");
+        } catch (e) {
+          return {
+            role: "tool",
+            tool_call_id: tc.id,
+            content: `Invalid JSON arguments: ${e instanceof Error ? e.message : String(e)}`,
+          };
+        }
+        const result = await runAgentSafely(agent, parsed, ctx);
+        trace.push(result);
+        return {
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(result.data ?? { error: result.error }),
+        };
+      }),
+    );
 
     messages.push(...toolMessages);
   }

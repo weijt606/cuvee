@@ -2,14 +2,41 @@ import "server-only";
 import { z } from "zod";
 
 const serverSchema = z.object({
+  // ─── default LLM selection ──────────────────────────────────────────────
+  /** Selects the default LLM provider for all agent calls.
+   *  Options: openai (default), anthropic, qwen, deepseek, ollama. */
+  CUVEE_LLM_PROVIDER: z
+    .enum(["openai", "anthropic", "qwen", "deepseek", "ollama"])
+    .default("openai"),
+  /** Overrides the model id for the chosen provider. When unset, each
+   *  provider falls back to its own *_MODEL env var or a baked-in default. */
+  CUVEE_LLM_MODEL: z.string().min(1).optional(),
+
+  // ─── OpenAI (default LLM provider) ──────────────────────────────────────
   OPENAI_API_KEY: z.string().min(1).optional(),
   OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
 
-  TAVILY_API_KEY: z.string().min(1).optional(),
+  // ─── Anthropic Claude (alt LLM provider) ────────────────────────────────
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_MODEL: z.string().min(1).default("claude-haiku-4-5"),
 
-  PIONEER_API_KEY: z.string().min(1).optional(),
-  PIONEER_BASE_URL: z.string().url().default("https://api.pioneer.ai"),
-  PIONEER_MODEL_ID: z.string().min(1).optional(),
+  // ─── Alibaba Qwen via DashScope (alt, OpenAI-compatible mode) ──────────
+  QWEN_API_KEY: z.string().min(1).optional(),
+  QWEN_MODEL: z.string().min(1).default("qwen-max"),
+  QWEN_BASE_URL: z.string().url().default("https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
+
+  // ─── DeepSeek (alt, OpenAI-compatible) ─────────────────────────────────
+  DEEPSEEK_API_KEY: z.string().min(1).optional(),
+  DEEPSEEK_MODEL: z.string().min(1).default("deepseek-chat"),
+  DEEPSEEK_BASE_URL: z.string().url().default("https://api.deepseek.com/v1"),
+
+  // ─── Ollama (local, free, OpenAI-compatible) ────────────────────────────
+  OLLAMA_BASE_URL: z.string().url().optional(),
+  OLLAMA_API_KEY: z.string().min(1).optional(),
+  OLLAMA_MODEL: z.string().min(1).default("qwen2.5:7b"),
+
+  // ─── retrieval (Tavily is one option among many — see B2 for alts) ──────
+  TAVILY_API_KEY: z.string().min(1).optional(),
 });
 
 const publicSchema = z.object({
@@ -19,22 +46,15 @@ const publicSchema = z.object({
     .default("false")
     .transform((v) => v === "true"),
   /**
-   * Demo-fast mode — applies tight budgets aimed at keeping a full
-   * /api/analyze call under 30 s for live demos. When true:
+   * Demo-fast mode — keeps the live demo snappy. When true:
    *   - Orchestrator bypasses the GPT tool-use loop and dispatches the
    *     known agent flow directly (saves 5-7 GPT routing roundtrips)
-   *   - Pipeline restructured for max parallelism (tavily + extraction
-   *     overlap, feature + backtest overlap)
-   *   - Tavily cache is pre-hydrated from data/tavily-cache-export.json
-   *   - feature_agent skips Pioneer (tier 1) and goes straight to OpenAI
-   *   - Tavily max_results_per_query is capped at 3
+   *   - Pipeline restructured for max parallelism
+   *   - Tavily cache pre-hydrated from data/tavily-cache-export.json
    *   - OpenAI model is pinned to gpt-4o-mini for all agent LLM calls
    *
-   * Default is `true` — the GPT routing layer is overhead for our fixed
-   * agent flow and the speedup matters more than the (rarely-used)
-   * adaptive routing. Set NEXT_PUBLIC_DEMO_FAST=false explicitly if you
-   * need the legacy GPT-driven orchestration (e.g. to experiment with
-   * letting the LLM skip/reorder agents per user question).
+   * Default is `true`. Set NEXT_PUBLIC_DEMO_FAST=false explicitly to
+   * use the legacy GPT-driven orchestration (~80 s/call).
    */
   NEXT_PUBLIC_DEMO_FAST: z
     .union([z.literal("true"), z.literal("false"), z.literal("")])
@@ -70,31 +90,22 @@ function parseEnv() {
 
 export const env = parseEnv();
 
-export const sponsors = {
+/** Provider availability — true when the key is set. Pioneer dropped in Phase B1. */
+export const integrations = {
   openai: Boolean(env.OPENAI_API_KEY),
+  anthropic: Boolean(env.ANTHROPIC_API_KEY),
+  qwen: Boolean(env.QWEN_API_KEY),
+  deepseek: Boolean(env.DEEPSEEK_API_KEY),
+  ollama: Boolean(env.OLLAMA_BASE_URL || env.OLLAMA_API_KEY),
   tavily: Boolean(env.TAVILY_API_KEY),
-  pioneer: Boolean(env.PIONEER_API_KEY),
 } as const;
 
-/** Convenience alias — same map, different reading. */
-export const integrations = sponsors;
+/** Back-compat alias — older code reads `sponsors`. New code should use `integrations`. */
+export const sponsors = integrations;
 
 export const isDemoMode = env.NEXT_PUBLIC_DEMO_MODE;
 export const isDemoFast = env.NEXT_PUBLIC_DEMO_FAST;
 
-/**
- * Returns the OpenAI model the wine-intelligence agents should use right now.
- *
- * In demo-fast mode we override whatever the operator put in OPENAI_MODEL with
- * gpt-4o-mini. The vintage-quality schema task is structured-JSON emission
- * against a fixed schema, which a reasoning model (gpt-5*, o-series) is
- * actively bad at — it spends 20-40 s on hidden chain-of-thought that adds
- * nothing the schema doesn't already constrain, and it rejects custom
- * temperature too. For a live ≤30 s demo we cannot afford that latency.
- */
-export function openaiModelForAgents(): string {
-  if (isDemoFast) return "gpt-4o-mini";
-  return env.OPENAI_MODEL;
-}
-
-export type SponsorKey = keyof typeof sponsors;
+export type ProviderKey = keyof typeof integrations;
+/** @deprecated alias of ProviderKey */
+export type SponsorKey = ProviderKey;

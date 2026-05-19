@@ -36,8 +36,8 @@ const FAQ: QA[] = [
     a: "Tavily Search API harness covering 5 Bordeaux source channels: sentiment / policy / regulation / winemaker / market. It applies trusted-domain weighting (INAO, agriculture.gouv.fr, Decanter, Jancis Robinson, Wine-Searcher…), URL dedupe, and a quality filter. A SQLite cache (node:sqlite, 7-day TTL) survives across requests so repeat queries hit local storage instead of the API.",
   },
   {
-    q: "Why both an OpenAI extraction and a Pioneer feature agent?",
-    a: "extraction needs to reason against a 5K-token schema and emit strict JSON with bounded fields — well-suited to a larger reasoning-capable model. feature is short-form packaging (2-sentence summary, 250-word report, 5-line digest) where a smaller, faster open-source model (Pioneer-hosted Qwen / Llama / GLM 7-8B class) is sufficient and cheaper. Pioneer is the preferred tier; OpenAI is the tier-2 fallback; a deterministic template is tier-3 so the dashboard never blanks.",
+    q: "How are the LLM providers wired?",
+    a: "One provider — the one named by CUVEE_LLM_PROVIDER (default: openai) — handles every agent LLM call. extraction, feature, and backtest go through the same defaultLLM().chat() entry point. Available providers: openai, anthropic (Claude), qwen (DashScope), deepseek, ollama (local + free). Strict JSON schema is enforced per-provider: OpenAI's response_format on OpenAI-compatible providers, Anthropic's tool-use trick on Claude. The deterministic template tier remains as a final fallback so the dashboard never blanks.",
   },
   {
     q: "What's backtest mode?",
@@ -53,11 +53,11 @@ const FAQ: QA[] = [
   },
   {
     q: "What if an LLM call fails or a key is missing?",
-    a: "Every layer has a graceful fallback. demo mode returns hand-tuned fixtures. Missing OPENAI_API_KEY returns the fixture pipeline flagged isDemoOrPartial. extraction's OpenAI failure falls back to a heuristic stub (still returns valid score + drivers). feature falls Pioneer → OpenAI → template. Sub-agent errors are logged in the trace but never crash the orchestrator. The cache only stores complete (non-partial) results so a degraded run doesn't poison subsequent requests.",
+    a: "Every layer has a graceful fallback. Demo mode returns hand-tuned fixtures. With no LLM provider configured the orchestrator returns the fixture pipeline flagged isDemoOrPartial. extraction's LLM failure falls back to a heuristic stub (still returns valid score + drivers). feature falls back to a deterministic template. Sub-agent errors are logged in the trace but never crash the orchestrator. The cache only stores complete (non-partial) results so a degraded run doesn't poison subsequent requests.",
   },
   {
-    q: "What sponsors are integrated?",
-    a: "OpenAI (orchestrator + extraction + feature tier-2 + backtest), Tavily (tavily_agent + backtest_agent search retrieval), Pioneer.ai (feature tier-1 — Pioneer-hosted wine LLM, fine-tunable for domain specialisation).",
+    q: "What providers does Cuvée integrate?",
+    a: "LLM: OpenAI (default), Anthropic Claude, Alibaba Qwen via DashScope, DeepSeek, Ollama (local + free) — selected by CUVEE_LLM_PROVIDER. Retrieval: Tavily currently; Brave Search and self-hosted SearXNG arrive in Phase B2. Self-optimization is handled by the memory layer (Phase B3) — episodic memory + few-shot retrieval + backtest-driven calibration drift — rather than by fine-tuning any specific small model.",
   },
 ];
 
@@ -78,7 +78,7 @@ const STAGES: StageBox[] = [
   {
     index: "2",
     title: "Orchestrator",
-    body: "OpenAI Chat Completions tool-use loop. Each sub-agent is registered as a function tool. System prompt enforces call order.",
+    body: "Direct dispatch by default (NEXT_PUBLIC_DEMO_FAST=true): fixed-order pipeline with weather + geo + tavily in parallel, then extraction, then feature + backtest in parallel. Legacy tool-use loop via defaultLLM() available behind the flag.",
     source: "src/lib/agents/orchestrator.ts",
   },
   {
@@ -96,7 +96,7 @@ const STAGES: StageBox[] = [
   {
     index: "5",
     title: "Feature",
-    body: "Tiered: Pioneer (preferred) → OpenAI → template. Outputs executive summary + markdown report + email digest.",
+    body: "Single LLM tier through defaultLLM().chat() (OpenAI / Claude / Qwen / DeepSeek / Ollama by config) with deterministic template fallback. Outputs executive summary + markdown report + email digest.",
     source: "src/lib/agents/feature.ts",
   },
   {
