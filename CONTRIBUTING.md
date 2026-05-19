@@ -58,7 +58,7 @@ git diff --cached    # scan for tokens / keys / personal info
 
 Specifically, **never commit**:
 - `.env*` files (only `.env.example` is allowed)
-- API keys (OpenAI `sk-` / `sk-proj-`, Tavily `tvly-`, Pioneer `pio_sk_`, AWS `AKIA…`)
+- API keys (OpenAI `sk-` / `sk-proj-`, Anthropic `sk-ant-`, Tavily `tvly-`, Brave subscription tokens, AWS `AKIA…`)
 - Personal information (real names beyond GitHub handle, addresses, phone numbers)
 - Absolute paths that include your home directory username
 

@@ -40,17 +40,43 @@ pnpm install
 cp .env.example .env.local
 ```
 
-Only **OpenAI** is required for the LLM-driven pipeline. Everything else degrades to a fixture or fallback when its key is missing:
+**One** LLM provider is required (any one of OpenAI / Anthropic / Qwen / DeepSeek / Ollama). Retrieval and everything else degrade to fixtures or fallbacks when the matching key is missing.
 
-| Variable | Required? | What it does | Where to get it |
+#### Core selection
+
+| Variable | Required? | What it does | Default |
 |---|---|---|---|
-| `OPENAI_API_KEY` | **Yes** for the live pipeline | Orchestrator, extraction, feature tier 2, backtest | <https://platform.openai.com/api-keys> |
-| `OPENAI_MODEL` | optional, default `gpt-4o-mini` | The agent LLM. **Don't use reasoning models** (`gpt-5*`, `o1`, `o3`) — they add 20-40 s of internal thinking that doesn't help structured JSON | — |
-| `TAVILY_API_KEY` | optional | Public-web grounding for the `tavily_agent` + backtest critic retrieval | <https://app.tavily.com/home> |
-| `PIONEER_API_KEY` | optional | `feature_agent` tier 1 (small open-source LLM for narrative wrapping) | <https://docs.pioneer.ai/> |
-| `PIONEER_MODEL_ID` | optional | Pioneer model UUID | Pioneer dashboard |
-| `NEXT_PUBLIC_DEMO_MODE` | optional, default `false` | Set `true` to short-circuit the entire pipeline to fixtures (no network, no keys needed) | — |
-| `NEXT_PUBLIC_DEMO_FAST` | optional, default `true` | Direct-dispatch pipeline. Set `false` to fall back to the legacy GPT tool-use routing loop (~80 s/call) | — |
+| `CUVEE_LLM_PROVIDER` | recommended | Default LLM provider — `openai`, `anthropic`, `qwen`, `deepseek`, or `ollama` | `openai` |
+| `CUVEE_LLM_MODEL` | optional | Overrides the chosen provider's model id | per-provider default |
+| `CUVEE_RETRIEVAL_PROVIDER` | optional | Override retrieval — `tavily`, `brave`, `searxng`, `null` | first configured (tavily → searxng → brave → null) |
+| `NEXT_PUBLIC_DEMO_MODE` | optional | Set `true` to short-circuit the pipeline to fixtures (no network, no keys needed) | `false` |
+| `NEXT_PUBLIC_DEMO_FAST` | optional | Direct-dispatch pipeline. Set `false` to fall back to the legacy GPT tool-use routing loop (~80 s/call) | `true` |
+
+#### LLM providers — pick one
+
+| Variable | What it does | Where to get it |
+|---|---|---|
+| `OPENAI_API_KEY` + `OPENAI_MODEL` | OpenAI (default). **Don't use reasoning models** (`gpt-5*`, `o1`, `o3`) — they add 20-40 s of internal thinking that doesn't help structured JSON. Use `gpt-4o-mini`. | <https://platform.openai.com/api-keys> |
+| `ANTHROPIC_API_KEY` + `ANTHROPIC_MODEL` | Anthropic Claude. Strict JSON via the tool-use trick. | <https://console.anthropic.com/> |
+| `QWEN_API_KEY` + `QWEN_MODEL` | Alibaba Qwen via DashScope (OpenAI-compatible mode) | <https://dashscope-intl.aliyuncs.com/> |
+| `DEEPSEEK_API_KEY` + `DEEPSEEK_MODEL` | DeepSeek (OpenAI-compatible) | <https://platform.deepseek.com/> |
+| `OLLAMA_BASE_URL` + `OLLAMA_MODEL` | Ollama (local + free + no API key). `ollama serve` then `ollama pull qwen2.5:7b`. | <https://ollama.com> |
+
+#### Retrieval providers — pick one (or none for offline)
+
+| Variable | What it does | Where to get it |
+|---|---|---|
+| `TAVILY_API_KEY` | Tavily managed search (free tier ~1k/mo) | <https://app.tavily.com/home> |
+| `BRAVE_API_KEY` | Brave Search managed API (free tier 2k/mo, no card) | <https://api.search.brave.com/> |
+| `SEARXNG_BASE_URL` + optional `SEARXNG_API_KEY` | Self-hosted SearXNG meta-search — truly free, no quota. Quick start: `docker run -d -p 8888:8080 searxng/searxng:latest` | <https://github.com/searxng/searxng> |
+
+#### Memory layer (self-optimization, replaces sponsor fine-tuning)
+
+| Variable | What it does | Default |
+|---|---|---|
+| `CUVEE_MEMORY_DISABLED` | Set `true` to disable the SQLite memory layer entirely (no episodic recall, no few-shot injection) | `false` |
+| `CUVEE_MEMORY_MAX_ROWS` | Row cap; oldest rows are FIFO-evicted past this | `1000` |
+| `CUVEE_MEMORY_FEW_SHOT_LIMIT` | Number of past predictions injected into the extraction prompt as calibration anchors | `3` |
 
 > `.env.local` is git-ignored. **Never commit real keys.** This repo is public.
 
@@ -106,24 +132,47 @@ NEXT_PUBLIC_DEMO_FAST=false pnpm dev
 POST /api/analyze
         │
         ▼
-   ┌──────────────────────────────────────────────────────────┐
-   │ Orchestrator — directDispatch (default)                  │
-   │   phase 1 (parallel)  weather + geo + tavily             │
-   │   phase 2             extraction (schema-grounded)       │
-   │   phase 3 (parallel)  feature + backtest (if past year)  │
-   └──────────────────────────────────────────────────────────┘
+   ┌──────────────────────────────────────────────────────────────┐
+   │ Orchestrator — directDispatch (default)                      │
+   │   phase 1 (parallel)  weather + geo + tavily_agent           │
+   │                       (tavily_agent uses defaultRetrieval()) │
+   │   phase 2             extraction (schema-grounded)           │
+   │                       + few-shot from memory()               │
+   │   phase 3 (parallel)  feature + backtest (if past year)      │
+   │   then                memory().insert(record)                │
+   └──────────────────────────────────────────────────────────────┘
         │
         ▼
    AnalyzeResult { riskScore, qualityBand, drivers, recommendations,
                    feature, geoSnapshot, backtest?, trace }
 ```
 
-The pipeline is **accuracy-first**: extraction always waits for and consumes all three signal sources (climate, terroir, public-web). Wallclock is dominated by Tavily on cold queries (6-10 s) plus the LLM extraction (~15-20 s) plus the feature narrative (~20-30 s with Pioneer's open-source model on hot path).
+The pipeline is **accuracy-first**: extraction always waits for and consumes all three signal sources (climate, terroir, public-web). Wallclock is dominated by retrieval on cold queries (6-10 s) plus the LLM extraction (~15-20 s) plus the feature narrative (~10-15 s on `gpt-4o-mini`; longer if you point at a local Ollama model).
+
+### Provider layer
+
+Every external dependency is pluggable behind a provider interface:
+
+| Concern | Interface | Default | Alternatives |
+|---|---|---|---|
+| LLM (extraction, feature, backtest, orchestrator) | `defaultLLM()` in `src/lib/llm/` | OpenAI `gpt-4o-mini` | Anthropic Claude · Qwen (DashScope) · DeepSeek · Ollama (local, free) |
+| Public-web retrieval | `defaultRetrieval()` in `src/lib/retrieval/` | first configured | Tavily · Brave (free 2k/mo) · SearXNG (self-hosted, free) · null (offline) |
+
+Switching providers is a one-env-var change. See `.env.example` for the full table.
+
+### Memory layer (self-optimization)
+
+Every analysis is persisted to a local SQLite store at `data/.memory/analysis-history.sqlite` (gitignored). Two feedback loops:
+
+1. **Few-shot** — extraction queries `memory().findSimilar()` before each LLM call and injects up to 3 nearest-neighbor past predictions as calibration anchors. The model sees its own prior verdicts and stays consistent.
+2. **Calibration drift** — when `backtest_agent` fires, the predicted-vs-actual delta lands in the same row. `memory().calibrationDrift(region, persona)` exposes the bias (e.g. "we under-predict Médoc by 3 quality points on average").
+
+This replaces sponsor-specific fine-tuning with a non-parametric, transparent mechanism — no model weights change, but the system gets better as it sees more data.
 
 ### Three caching layers
 
 1. **Orchestrator** — in-memory `Map`, 30-min TTL, 64-entry LRU, keyed on full input
-2. **Tavily SQLite** — `node:sqlite`, 7-day TTL, survives process restarts
+2. **Tavily / retrieval SQLite** — `node:sqlite`, 7-day TTL, survives process restarts
 3. **Repo-shipped pre-hydration** — `data/tavily-cache-export.json` seeds the SQLite cache on first read so curated demo queries skip the network
 
 ### Schema-grounded scoring
@@ -132,7 +181,7 @@ The LLM emits a `qualityScore` (0-100, high = good) against the 1,150-line schem
 
 ### Backtest verification
 
-When `timeframe.end < today`, `backtest_agent` retrieves real-world critic + market data via a chateau-scoped Tavily call, then asks OpenAI to compare the prediction against the retrieved evidence. Output: a `verdict` (`high_agreement` / `moderate_agreement` / `divergent`) plus 4-6 critic entries with quoted scores. This closes the loop — predictions are auditable, not vibes.
+When `timeframe.end < today`, `backtest_agent` retrieves real-world critic + market data via a chateau-scoped search through `defaultRetrieval()`, then asks the configured LLM to compare the prediction against the retrieved evidence. Output: a `verdict` (`high_agreement` / `moderate_agreement` / `divergent`) plus 4-6 critic entries with quoted scores. This closes the loop — predictions are auditable, not vibes.
 
 ---
 
@@ -143,7 +192,7 @@ cuvee/
 ├── data/                      # CSV datasets + JSON schema + pre-hydrated cache
 ├── docs/
 │   ├── AGENTS.md              # Agent-layer guide
-│   └── SPONSORS.md            # OpenAI · Tavily · Pioneer.ai integration
+│   └── PROVIDERS.md           # LLM + retrieval provider integration
 ├── scripts/                   # check:env, test:geo, test:weather, export:tavily-cache
 ├── src/
 │   ├── app/                   # Next.js App Router (api · blog · trade · vineyard)
@@ -154,21 +203,22 @@ cuvee/
 │   │   └── wine/vineyard/     # vineyard-persona UI
 │   └── lib/
 │       ├── agents/            # orchestrator + extraction + feature + sub-agents/
-│       ├── ai/                # OpenAI client
-│       ├── training/          # Pioneer adapter
+│       ├── llm/               # LLMProvider — OpenAI · Anthropic · Qwen · DeepSeek · Ollama
+│       ├── retrieval/         # RetrievalProvider — Tavily · Brave · SearXNG · null
+│       ├── memory/            # SQLite-backed episodic memory + few-shot retrieval
 │       ├── wine/              # domain types, regions, products
 │       └── env.ts
 └── ...
 ```
 
-For the deep dive on the agent contract, see [`docs/AGENTS.md`](docs/AGENTS.md). For provider wiring (OpenAI / Tavily / Pioneer.ai) see [`docs/SPONSORS.md`](docs/SPONSORS.md).
+For the deep dive on the agent contract, see [`docs/AGENTS.md`](docs/AGENTS.md). For provider wiring (LLM + retrieval) see [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 
 ---
 
 ## Roadmap
 
 - [x] **Phase A — clean baseline** — single-repo standalone, accuracy-first pipeline, light/dark UI, backtest verification
-- [ ] **Phase B — provider abstraction** — `LLMProvider` + `RetrievalProvider` interfaces; OpenAI / Anthropic / Mistral / Ollama / Tavily / Brave / Serper as default adapters
+- [x] **Phase B — provider abstraction + memory self-optimization** — `LLMProvider` interface (OpenAI / Claude / Qwen / DeepSeek / Ollama) · `RetrievalProvider` interface (Tavily / Brave / SearXNG / null) · SQLite memory layer with few-shot calibration anchors · Pioneer fine-tuning replaced by non-parametric learning from history
 - [ ] **Phase C — Burgundy expansion** — add Côte de Nuits / Côte de Beaune / Chablis terroir datasets
 - [ ] **Phase D — Champagne** — extend schema with sparkling-specific gates
 - [ ] **Phase E — self-hostable Docker** — `docker-compose` with optional local Ollama service
