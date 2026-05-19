@@ -237,7 +237,7 @@ If a non-wine vertical reaches out (agriculture, climate-real-estate, insurance)
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the agent contract, PR checklist, and conventions. Branch names must be ASCII / English. No `Co-Authored-By:` AI trailers in commits.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the agent contract, PR checklist, conventions, and acknowledgements (origin, hackathon credits, sponsor thanks). Branch names must be ASCII / English. No `Co-Authored-By:` AI trailers in commits.
 
 ## License
 

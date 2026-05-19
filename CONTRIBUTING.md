@@ -1,5 +1,41 @@
 # Contributing to Cuvée
 
+## Origin
+
+Cuvée is the post-hackathon continuation of **Wine Signals**, built in a
+single seven-hour sprint at the **Paris AI Hackathon 2026** (hosted by
+{Tech: Europe} + Hexa). The original hackathon repository is preserved
+in its as-shipped state at
+<https://github.com/weijt606/paris-ai-hackathon-2026>.
+
+Cuvée inherits the architecture verbatim — the multi-agent pipeline,
+the 1,150-line vintage-quality schema, the 61-château 1855 dataset,
+the backtest verification loop, the Atlas UI shell — and then strips
+the hackathon-specific framing, replaces the sponsor-bound stack with
+pluggable provider interfaces, and adds a memory layer for
+self-optimization (Phase B in [`README.md`](README.md#roadmap)).
+
+## Acknowledgements
+
+This project would not exist without the work shipped during the
+hackathon sprint. The full contributor list, commit history, and
+individual ownership of the sub-agents and integration work are
+preserved in the hackathon repository — see
+<https://github.com/weijt606/paris-ai-hackathon-2026> for who built what.
+
+With gratitude to:
+
+- **The Paris AI Hackathon 2026 team** whose seven-hour sprint shipped
+  the architecture this project inherits.
+- **OpenAI**, **Tavily**, and **Pioneer.ai** — the sponsors whose APIs
+  the hackathon was built against. OpenAI remains the default LLM
+  provider; Tavily is one of four supported retrieval backends;
+  Pioneer's role (specialising the system over time) is now served by
+  the non-parametric memory layer in `src/lib/memory/`.
+- **{Tech: Europe}** and **Hexa** for hosting the event.
+
+---
+
 ## Setup
 
 See [`README.md`](README.md) "Quick start" for prerequisites + the four-step setup. Once you have a working dev server, you're ready to contribute.
