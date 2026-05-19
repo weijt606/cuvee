@@ -35,8 +35,23 @@ const serverSchema = z.object({
   OLLAMA_API_KEY: z.string().min(1).optional(),
   OLLAMA_MODEL: z.string().min(1).default("qwen2.5:7b"),
 
-  // ─── retrieval (Tavily is one option among many — see B2 for alts) ──────
+  // ─── retrieval (public-web grounding) ──────────────────────────────────
+  /** Optional explicit override. When unset, defaultRetrieval() prefers the
+   *  first configured provider in this order: tavily, searxng, brave, null. */
+  CUVEE_RETRIEVAL_PROVIDER: z
+    .enum(["tavily", "brave", "searxng", "null"])
+    .optional(),
+
+  // Tavily — managed API, paid plans (free tier ~1k/mo).
   TAVILY_API_KEY: z.string().min(1).optional(),
+
+  // Brave Search — managed API, free tier 2k/mo. https://api.search.brave.com
+  BRAVE_API_KEY: z.string().min(1).optional(),
+
+  // SearXNG — self-hosted, truly free. Set base URL of your instance.
+  SEARXNG_BASE_URL: z.string().url().optional(),
+  /** Optional bearer token if your SearXNG instance is protected. */
+  SEARXNG_API_KEY: z.string().min(1).optional(),
 });
 
 const publicSchema = z.object({
@@ -98,6 +113,8 @@ export const integrations = {
   deepseek: Boolean(env.DEEPSEEK_API_KEY),
   ollama: Boolean(env.OLLAMA_BASE_URL || env.OLLAMA_API_KEY),
   tavily: Boolean(env.TAVILY_API_KEY),
+  brave: Boolean(env.BRAVE_API_KEY),
+  searxng: Boolean(env.SEARXNG_BASE_URL),
 } as const;
 
 /** Back-compat alias — older code reads `sponsors`. New code should use `integrations`. */

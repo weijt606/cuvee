@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { integrations, isDemoMode } from "@/lib/env";
 
-const PROVIDER_INFO: { key: keyof typeof integrations; name: string; role: string }[] = [
-  { key: "openai", name: "OpenAI", role: "Default LLM provider — extraction · feature · backtest · orchestrator routing" },
-  { key: "anthropic", name: "Anthropic Claude", role: "Alt LLM — set CUVEE_LLM_PROVIDER=anthropic to use" },
-  { key: "qwen", name: "Qwen (DashScope)", role: "Alt LLM — set CUVEE_LLM_PROVIDER=qwen to use" },
-  { key: "deepseek", name: "DeepSeek", role: "Alt LLM — set CUVEE_LLM_PROVIDER=deepseek to use" },
-  { key: "ollama", name: "Ollama (local)", role: "Alt LLM — set CUVEE_LLM_PROVIDER=ollama (free, runs locally)" },
-  { key: "tavily", name: "Tavily", role: "Public-web grounding for tavily_agent + backtest critic retrieval" },
+const LLM_PROVIDERS: { key: keyof typeof integrations; name: string; role: string }[] = [
+  { key: "openai", name: "OpenAI", role: "Default LLM — extraction · feature · backtest · orchestrator" },
+  { key: "anthropic", name: "Anthropic Claude", role: "Alt LLM — set CUVEE_LLM_PROVIDER=anthropic" },
+  { key: "qwen", name: "Qwen (DashScope)", role: "Alt LLM — set CUVEE_LLM_PROVIDER=qwen" },
+  { key: "deepseek", name: "DeepSeek", role: "Alt LLM — set CUVEE_LLM_PROVIDER=deepseek" },
+  { key: "ollama", name: "Ollama (local)", role: "Alt LLM — set CUVEE_LLM_PROVIDER=ollama (free, local)" },
+];
+
+const RETRIEVAL_PROVIDERS: { key: keyof typeof integrations; name: string; role: string }[] = [
+  { key: "tavily", name: "Tavily", role: "Managed search API — free tier ~1k/mo" },
+  { key: "brave", name: "Brave Search", role: "Managed search API — free tier 2k/mo" },
+  { key: "searxng", name: "SearXNG", role: "Self-hosted meta-search — truly free, no API key" },
 ];
 
 export default function ScaffoldPage() {
@@ -28,9 +33,26 @@ export default function ScaffoldPage() {
       </header>
 
       <section className="mb-10">
-        <h2 className="section-kicker mb-4">Providers</h2>
+        <h2 className="section-kicker mb-4">LLM providers</h2>
+        <p className="mb-3 text-xs text-soft">
+          One handles every agent call. Select via <code>CUVEE_LLM_PROVIDER</code>.
+        </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          {PROVIDER_INFO.map((s) => (
+          {LLM_PROVIDERS.map((s) => (
+            <Card key={s.key} name={s.name} role={s.role} on={integrations[s.key]} />
+          ))}
+        </div>
+      </section>
+
+      <section className="mb-10">
+        <h2 className="section-kicker mb-4">Retrieval providers</h2>
+        <p className="mb-3 text-xs text-soft">
+          Public-web grounding for <code>tavily_agent</code> + backtest critic
+          retrieval. Select via <code>CUVEE_RETRIEVAL_PROVIDER</code>. Auto-prefers
+          tavily → searxng → brave → null when unset.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {RETRIEVAL_PROVIDERS.map((s) => (
             <Card key={s.key} name={s.name} role={s.role} on={integrations[s.key]} />
           ))}
         </div>

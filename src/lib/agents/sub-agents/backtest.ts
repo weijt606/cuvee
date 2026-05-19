@@ -1,6 +1,7 @@
 import "server-only";
-import { integrations, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 import { defaultLLM, hasLLM } from "@/lib/llm";
+import { hasRetrieval } from "@/lib/retrieval";
 import { runTavilyHarness } from "@/lib/agents/sub-agents/tavily";
 import type { SubAgent } from "@/lib/agents/types";
 import type { BacktestSnapshot, Persona } from "@/lib/wine/types";
@@ -138,7 +139,7 @@ async function fetchCriticContext(
   signal: AbortSignal,
   chateau?: string,
 ): Promise<string> {
-  if (!integrations.tavily) return "";
+  if (!hasRetrieval()) return "";
   try {
     // Mirror the orchestrator's tavily_agent call shape — no aggressive
     // refinement, just chateau scoping when available. An earlier attempt

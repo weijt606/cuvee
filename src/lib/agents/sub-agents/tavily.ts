@@ -1,5 +1,6 @@
 import "server-only";
-import { env, integrations, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
+import { defaultRetrieval, hasRetrieval } from "@/lib/retrieval";
 import type { AgentContext, SubAgent } from "@/lib/agents/types";
 import { findRegion } from "@/lib/wine/regions";
 import {
@@ -115,15 +116,16 @@ export interface TavilySignals {
   results?: TavilyHarnessResult[];
 }
 
+// Historical Tavily wire shape — kept as the harness's internal row type so
+// the surrounding quality-filter / dedupe / weighting code doesn't need to
+// be rewritten when the underlying provider changes. fetchSearch() (below)
+// maps from the provider-neutral RetrievalSearchResult to this shape.
 type TavilySearchResult = {
   title?: string;
   url?: string;
   content?: string;
   score?: number;
-};
-
-type TavilySearchResponse = {
-  results?: TavilySearchResult[];
+  published_date?: string;
 };
 
 const MAX_QUERY_COUNT = 200;
@@ -134,9 +136,9 @@ const MAX_YEAR_SPAN = 16;
 // dropping them measurably biases the driver weighting toward weather/geo.
 const DEFAULT_MAX_RESULTS_PER_QUERY = 5;
 const MIN_TAVILY_SCORE = 0.2;
-const REQUEST_TIMEOUT_MS = 8000;
-const MAX_RETRIES = 1;
 const MAX_CONCURRENT_REQUESTS = 5;
+// REQUEST_TIMEOUT_MS and MAX_RETRIES moved into per-provider implementations
+// under src/lib/retrieval/providers/ when the retrieval layer was abstracted.
 
 const SOURCE_WEIGHTS: Record<TavilySourceType, number> = {
   bordeaux_sentiment: 0.75,
@@ -365,60 +367,27 @@ function buildQueries(input: NormalizedHarnessInput, refinement?: string): Query
   return specs;
 }
 
-async function fetchTavily(
+/**
+ * Provider-neutral single-query search. Delegates to whatever retrieval
+ * provider is configured (Tavily, Brave, SearXNG, or null). Keeping this
+ * helper here (rather than calling defaultRetrieval directly from the
+ * worker pool) preserves the historical TavilySearchResult shape so the
+ * downstream harness code (quality filter, dedupe, scoring) didn't have to
+ * change when we abstracted the provider.
+ */
+async function fetchSearch(
   query: string,
   maxResults: number,
   signal?: AbortSignal,
 ): Promise<TavilySearchResult[]> {
-  let lastErr: unknown;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
-    const merged = new AbortController();
-    const onAbort = () => merged.abort();
-    timeout.signal.addEventListener("abort", onAbort, { once: true });
-    signal?.addEventListener("abort", onAbort, { once: true });
-    try {
-      const payload = {
-        query,
-        search_depth: "advanced",
-        max_results: maxResults,
-        include_answer: false,
-        include_raw_content: false,
-      };
-      const res = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        signal: merged.signal,
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${env.TAVILY_API_KEY}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      if (res.status === 401) {
-        const retryWithBodyKey = await fetch("https://api.tavily.com/search", {
-          method: "POST",
-          signal: merged.signal,
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ...payload, api_key: env.TAVILY_API_KEY }),
-        });
-        if (!retryWithBodyKey.ok) throw new Error(`Tavily HTTP ${retryWithBodyKey.status}`);
-        const body = (await retryWithBodyKey.json()) as TavilySearchResponse;
-        return body.results ?? [];
-      }
-      if (!res.ok) throw new Error(`Tavily HTTP ${res.status}`);
-      const body = (await res.json()) as TavilySearchResponse;
-      return body.results ?? [];
-    } catch (err) {
-      lastErr = err;
-      if (attempt <= MAX_RETRIES - 1) await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
-    } finally {
-      clearTimeout(timer);
-      timeout.signal.removeEventListener("abort", onAbort);
-      signal?.removeEventListener("abort", onAbort);
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+  const results = await defaultRetrieval().search({ query, maxResults, signal });
+  return results.map((r) => ({
+    url: r.url,
+    title: r.title,
+    content: r.content,
+    score: r.score,
+    published_date: r.publishedDate,
+  }));
 }
 
 function qualityFilter(r: TavilyHarnessResult): boolean {
@@ -526,7 +495,7 @@ export async function runTavilyHarness(
         }
 
         if (!rows) {
-          rows = await fetchTavily(spec.query, input.maxResultsPerQuery, opts.signal);
+          rows = await fetchSearch(spec.query, input.maxResultsPerQuery, opts.signal);
           liveFetches++;
           await writeTavilyCache(cacheKey, cacheInput, rows);
         }
@@ -740,13 +709,13 @@ export const tavilyAgent: SubAgent<TavilyInput, TavilySignals> = {
       };
     }
 
-    if (!integrations.tavily) {
+    if (!hasRetrieval()) {
       return {
         agent: "tavily_agent",
         ok: true,
         durationMs: Date.now() - t0,
         data: {
-          summary: `[stub] no TAVILY_API_KEY — tavily harness disabled`,
+          summary: `[stub] no retrieval provider configured — public-web harness disabled`,
           signals: [],
           partial: true,
           report: {
