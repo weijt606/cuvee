@@ -1,8 +1,9 @@
 import "server-only";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { isDemoMode, openaiModelForAgents, sponsors } from "@/lib/env";
-import { openaiClient } from "@/lib/ai/openai";
+import { env, isDemoMode } from "@/lib/env";
+import { defaultLLM, hasLLM } from "@/lib/llm";
+import { memory, formatFewShotExamples } from "@/lib/memory";
 import type { SubAgent } from "@/lib/agents/types";
 import type { Persona, Recommendation, RiskDriver } from "@/lib/wine/types";
 
@@ -213,15 +214,15 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
   async run(input, ctx) {
     const t0 = Date.now();
 
-    // Demo mode or no OpenAI key → heuristic fallback.
-    if (isDemoMode || !sponsors.openai) {
+    // Demo mode or no LLM provider configured → heuristic fallback.
+    if (isDemoMode || !hasLLM()) {
       const data = heuristicFallback(input);
       return {
         agent: "extraction_agent",
         ok: true,
         durationMs: Date.now() - t0,
         data,
-        summary: isDemoMode ? "demo · heuristic" : "no openai · heuristic",
+        summary: isDemoMode ? "demo · heuristic" : "no llm · heuristic",
       };
     }
 
@@ -248,11 +249,29 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
       : "";
 
     try {
-      const client = openaiClient();
       const tradeLens =
         input.persona === "trade" && ctx.tradePersona
           ? tradePersonaLens(ctx.tradePersona)
           : "";
+
+      // Memory-based self-optimization: pull the most similar past
+      // predictions (preferring backtest-verified ones) and inject them
+      // as calibration anchors. This is what replaced Pioneer's fine-
+      // tuning role — the LLM stays consistent across runs because it
+      // sees its own prior verdicts, and gradually drifts toward critic
+      // consensus when backtests are available.
+      const vintageYear = Number.parseInt(
+        (input.weatherSignal?.match(/\bVintage (\d{4})\b/)?.[1] ?? "") || `${new Date().getFullYear()}`,
+        10,
+      );
+      const fewShot = await memory().findSimilar({
+        regionId: input.regionId,
+        persona: input.persona,
+        chateau: ctx.chateau,
+        year: vintageYear,
+        limit: env.CUVEE_MEMORY_FEW_SHOT_LIMIT,
+      });
+      const fewShotBlock = formatFewShotExamples(fewShot);
 
       const userMessage = [
         `Region id: ${input.regionId}`,
@@ -262,29 +281,25 @@ export const extractionAgent: SubAgent<ExtractionInput, ExtractionOutput> = {
         input.geoSignal && `Geographical / terroir signals:\n${input.geoSignal}`,
         input.tavilySignal && `Public-web signals:\n${input.tavilySignal}`,
         uploadBlock,
+        fewShotBlock,
       ]
         .filter(Boolean)
         .join("\n\n");
 
-      const res = await client.chat.completions.create(
-        {
-          model: openaiModelForAgents(),
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT_HEAD + schemaText },
-            { role: "user", content: userMessage },
-          ],
-          response_format: {
-            type: "json_schema",
-            json_schema: RESPONSE_JSON_SCHEMA,
-          },
-          // Note: newer OpenAI reasoning models (gpt-5*, o-series) only
-          // accept the default temperature. We omit the param so any
-          // current GA model works.
+      const res = await defaultLLM().chat({
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT_HEAD + schemaText },
+          { role: "user", content: userMessage },
+        ],
+        responseSchema: {
+          name: RESPONSE_JSON_SCHEMA.name,
+          schema: RESPONSE_JSON_SCHEMA.schema as Record<string, unknown>,
+          strict: RESPONSE_JSON_SCHEMA.strict,
         },
-        { signal: ctx.signal },
-      );
+        signal: ctx.signal,
+      });
 
-      const content = res.choices[0]?.message?.content;
+      const content = res.content;
       if (!content) {
         const data = heuristicFallback(input);
         return {

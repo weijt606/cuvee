@@ -12,7 +12,6 @@ export type NodeKey =
   | "geo_agent"
   | "tavily_agent"
   | "extraction_agent"
-  | "pioneer"
   | "feature_agent"
   | "backtest_agent"
   | "dashboard";
@@ -24,7 +23,6 @@ export interface WorkflowState {
   geo_agent: AgentState;
   tavily_agent: AgentState;
   extraction_agent: AgentState;
-  pioneer: AgentState;
   feature_agent: AgentState;
   backtest_agent: AgentState;
   dashboard: AgentState;
@@ -37,7 +35,6 @@ export const INITIAL_WORKFLOW: WorkflowState = {
   geo_agent: "pending",
   tavily_agent: "pending",
   extraction_agent: "pending",
-  pioneer: "pending",
   feature_agent: "pending",
   backtest_agent: "pending",
   dashboard: "pending",
@@ -57,24 +54,24 @@ interface NodeDef {
 }
 
 // n8n-inspired vertical flow. ViewBox is 180 wide; layout is centered on x=90.
-// Pioneer is a sidecar to extraction reached via a dashed "tool call" edge.
+// (Pioneer was previously a sidecar node here; dropped in Phase B1 when the
+// LLM stack became single-tier-configurable via CUVEE_LLM_PROVIDER.)
 const NODES: Record<NodeKey, NodeDef> = {
   input:             { cx: 90, cy: 14,  w: 70, h: 18, label: "input",        sub: "user request",     icon: "I", kind: "input" },
-  orchestrator:      { cx: 90, cy: 42,  w: 70, h: 20, label: "orchestrator", sub: "openai tool-use",  icon: "O", kind: "router" },
+  orchestrator:      { cx: 90, cy: 42,  w: 70, h: 20, label: "orchestrator", sub: "direct dispatch",  icon: "O", kind: "router" },
   weather_agent:     { cx: 28, cy: 76,  w: 44, h: 16, label: "weather",      sub: "climate",          icon: "W", kind: "agent" },
   geo_agent:         { cx: 90, cy: 76,  w: 44, h: 16, label: "geo",          sub: "terroir",          icon: "G", kind: "agent" },
   tavily_agent:      { cx: 152, cy: 76, w: 44, h: 16, label: "tavily",       sub: "public web",       icon: "T", kind: "agent" },
-  extraction_agent:  { cx: 78, cy: 108, w: 70, h: 20, label: "extraction",   sub: "risk evaluator",   icon: "E", kind: "router" },
-  feature_agent:     { cx: 78, cy: 138, w: 70, h: 20, label: "feature",      sub: "summary · report", icon: "F", kind: "agent" },
-  pioneer:           { cx: 156, cy: 138,w: 36, h: 14, label: "pioneer",      sub: "wine LLM",         icon: "P", kind: "tool" },
-  backtest_agent:    { cx: 78, cy: 168, w: 70, h: 18, label: "backtest",     sub: "tavily · critics",  icon: "B", kind: "agent" },
-  dashboard:         { cx: 78, cy: 196, w: 70, h: 18, label: "dashboard",    sub: "result",           icon: "D", kind: "output" },
+  extraction_agent:  { cx: 90, cy: 108, w: 70, h: 20, label: "extraction",   sub: "schema scorer",    icon: "E", kind: "router" },
+  feature_agent:     { cx: 90, cy: 138, w: 70, h: 20, label: "feature",      sub: "summary · report", icon: "F", kind: "agent" },
+  backtest_agent:    { cx: 90, cy: 168, w: 70, h: 18, label: "backtest",     sub: "critic verdict",   icon: "B", kind: "agent" },
+  dashboard:         { cx: 90, cy: 196, w: 70, h: 18, label: "dashboard",    sub: "result",           icon: "D", kind: "output" },
 };
 
 interface Edge {
   from: NodeKey;
   to: NodeKey;
-  /** Tool call (Pioneer): dashed horizontal connector. */
+  /** Reserved for future side-tools (was used by the dropped Pioneer node). */
   style?: "tool";
 }
 
@@ -87,7 +84,6 @@ const EDGES: Edge[] = [
   { from: "geo_agent", to: "extraction_agent" },
   { from: "tavily_agent", to: "extraction_agent" },
   { from: "extraction_agent", to: "feature_agent" },
-  { from: "feature_agent", to: "pioneer", style: "tool" },
   { from: "feature_agent", to: "backtest_agent" },
   { from: "backtest_agent", to: "dashboard" },
 ];
@@ -96,7 +92,7 @@ const KIND_ACCENT: Record<NodeKind, string> = {
   input: "hsl(var(--muted-foreground))",
   router: "hsl(var(--chart-1))",     // bordeaux — orchestrator / extraction
   agent: "hsl(var(--chart-4))",      // navy — data-collection sub-agents
-  tool: "hsl(var(--chart-5))",       // gold — external tool calls (Pioneer)
+  tool: "hsl(var(--chart-5))",       // gold — reserved for future side-tools
   output: "hsl(var(--foreground))",
 };
 

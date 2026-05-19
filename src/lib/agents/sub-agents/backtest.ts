@@ -1,6 +1,7 @@
 import "server-only";
-import { integrations, isDemoMode, openaiModelForAgents, sponsors } from "@/lib/env";
-import { openaiClient } from "@/lib/ai/openai";
+import { isDemoMode } from "@/lib/env";
+import { defaultLLM, hasLLM } from "@/lib/llm";
+import { hasRetrieval } from "@/lib/retrieval";
 import { runTavilyHarness } from "@/lib/agents/sub-agents/tavily";
 import type { SubAgent } from "@/lib/agents/types";
 import type { BacktestSnapshot, Persona } from "@/lib/wine/types";
@@ -138,7 +139,7 @@ async function fetchCriticContext(
   signal: AbortSignal,
   chateau?: string,
 ): Promise<string> {
-  if (!integrations.tavily) return "";
+  if (!hasRetrieval()) return "";
   try {
     // Mirror the orchestrator's tavily_agent call shape — no aggressive
     // refinement, just chateau scoping when available. An earlier attempt
@@ -211,13 +212,13 @@ export const backtestAgent: SubAgent<BacktestInput, BacktestOutput> = {
       };
     }
 
-    if (!sponsors.openai) {
+    if (!hasLLM()) {
       return {
         agent: "backtest_agent",
         ok: true,
         durationMs: Date.now() - t0,
         data: demoBacktest(input),
-        summary: "no openai · backtest fixture",
+        summary: "no llm · backtest fixture",
       };
     }
 
@@ -230,7 +231,6 @@ export const backtestAgent: SubAgent<BacktestInput, BacktestOutput> = {
     );
 
     try {
-      const client = openaiClient();
       const predictedBand = input.predictedBand ?? predictedBandFromScore(input.predictedScore);
       const userMessage = [
         `Vintage year: ${input.year}`,
@@ -239,25 +239,26 @@ export const backtestAgent: SubAgent<BacktestInput, BacktestOutput> = {
         `Our predicted RISK score: ${input.predictedScore}/100 (${predictedBand} quality band)`,
         input.driversSummary ? `Predicted drivers: ${input.driversSummary}` : "",
         "",
-        "Real-world search results (Tavily, top hits):",
+        "Real-world search results (top hits):",
         criticContext || "[no critic context available — leave critics array empty and verdict='moderate_agreement']",
       ]
         .filter(Boolean)
         .join("\n");
 
-      const res = await client.chat.completions.create(
-        {
-          model: openaiModelForAgents(),
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userMessage },
-          ],
-          response_format: { type: "json_schema", json_schema: BACKTEST_RESPONSE_SCHEMA },
+      const res = await defaultLLM().chat({
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userMessage },
+        ],
+        responseSchema: {
+          name: BACKTEST_RESPONSE_SCHEMA.name,
+          schema: BACKTEST_RESPONSE_SCHEMA.schema as Record<string, unknown>,
+          strict: BACKTEST_RESPONSE_SCHEMA.strict,
         },
-        { signal: ctx.signal },
-      );
+        signal: ctx.signal,
+      });
 
-      const content = res.choices[0]?.message?.content;
+      const content = res.content;
       if (!content) {
         return {
           agent: "backtest_agent",

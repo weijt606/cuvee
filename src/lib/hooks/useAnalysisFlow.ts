@@ -24,8 +24,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  *   1.  orchestrator — runs, then ok
  *   2.  fan-out      — weather + geo + tavily run in parallel
  *   3.  api join     — wait for response, map traces to ok/fail
- *   4.  extraction   — runs (pioneer fires concurrently as a tool call)
- *   5.  pioneer ok   — short-lived: pioneer responds before extraction concludes
+ *   4.  extraction   — runs alone
  *   6.  extraction ok
  *   7.  feature      — runs, then ok
  *   8.  dashboard ok — reveal the result panel
@@ -98,7 +97,7 @@ export function useAnalysisFlow() {
         tavily_agent: detailOf("tavily_agent"),
       }));
 
-      // Phase 3 — extraction runs alone (no Pioneer here; Pioneer serves feature now)
+      // Phase 3 — extraction runs alone
       await sleep(240);
       setWorkflowState((s) => ({ ...s, extraction_agent: "running" }));
 
@@ -106,19 +105,11 @@ export function useAnalysisFlow() {
       setWorkflowState((s) => ({ ...s, extraction_agent: setSub("extraction_agent") }));
       setDetails((d) => ({ ...d, extraction_agent: detailOf("extraction_agent") }));
 
-      // Phase 4 — feature + Pioneer (tool call) run concurrently
+      // Phase 4 — feature
       await sleep(220);
-      setWorkflowState((s) => ({
-        ...s,
-        feature_agent: "running",
-        pioneer: "running",
-      }));
+      setWorkflowState((s) => ({ ...s, feature_agent: "running" }));
 
-      // Pioneer (Qwen / GLM / Llama-class) responds first — it's the inner LLM
-      await sleep(360);
-      setWorkflowState((s) => ({ ...s, pioneer: "ok" }));
-
-      await sleep(140);
+      await sleep(500);
       setWorkflowState((s) => ({ ...s, feature_agent: setSub("feature_agent") }));
       setDetails((d) => ({ ...d, feature_agent: detailOf("feature_agent") }));
 
