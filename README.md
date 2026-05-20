@@ -241,4 +241,6 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the agent contract, PR checklist, c
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+Source code is MIT — see [`LICENSE`](LICENSE).
+
+Bundled datasets under `data/` follow their own upstream terms — see [`docs/DATA.md`](docs/DATA.md) for the full attribution table. **Climate data carries a mandatory Copernicus attribution string**: *Generated using Copernicus Climate Change Service information 2024. Neither the European Commission nor ECMWF is responsible for any use that may be made of the Copernicus information or data it contains.*
