@@ -19,3 +19,26 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+This MIT license covers Cuvée's source code only. Bundled datasets under
+`data/` follow their own upstream licenses — see `docs/DATA.md` for the
+full attribution table.
+
+Climate data shipped here was generated using Copernicus Climate Change
+Service information (ERA5 reanalysis and ECMWF SEAS5 seasonal forecast)
+under the Copernicus License. Required attribution:
+
+    "Generated using Copernicus Climate Change Service information 2024.
+     Neither the European Commission nor ECMWF is responsible for any
+     use that may be made of the Copernicus information or data it
+     contains."
+
+2025 NASA POWER backfill rows are public domain (17 U.S.C. § 105).
+1855 château classification names are public domain (1855 historical
+work). Derived terroir columns + the vintage-quality scoring schema are
+original work covered by this MIT license.
+
+If you fork or redistribute, carry the Copernicus attribution forward
+in any product surface that displays or makes use of the climate data.
