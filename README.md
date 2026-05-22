@@ -1,4 +1,4 @@
-# 🍇 Cuvée
+# Cuvée
 
 **Schema-grounded multi-agent vintage intelligence for French wine regions — with critic-backed backtest verification.**
 
@@ -18,7 +18,7 @@ The pipeline runs end-to-end in ~40-55 s cold, < 50 ms warm. The dashboard is a 
 
 https://github.com/user-attachments/assets/c74f0c74-6665-4cff-b564-541e9606971c
 
-90-second walk-through of the live dashboard — château pick → workflow hero → analysis drawer with risk band, drivers, and backtest verdict.
+60-second walk-through of the live dashboard — château pick → workflow hero → analysis drawer with risk band, drivers, and backtest verdict.
 
 ---
 
