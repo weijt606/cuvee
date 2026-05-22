@@ -16,7 +16,7 @@ The pipeline runs end-to-end in ~40-55 s cold, < 50 ms warm. The dashboard is a 
 
 ## Demo
 
-https://github.com/user-attachments/assets/c74f0c74-6665-4cff-b564-541e9606971c
+https://github.com/user-attachments/assets/8740f19a-39b1-4bea-87ce-a74982b0f2c3
 
 60-second walk-through of the live dashboard — château pick → workflow hero → analysis drawer with risk band, drivers, and backtest verdict.
 
